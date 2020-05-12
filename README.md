@@ -3,8 +3,7 @@
 Code for the computing beads in a slice with varying width for minimizing underfill.
 This is the code developed for the publication
 
-_Variable-width contouring for additive manufacturing_.
-ACM Transactions on Graphics (proc. SIGGRAPH 2020)
+> _Variable-width contouring for additive manufacturing_. ACM Transactions on Graphics 39(4) (Proc. SIGGRAPH 2020) [[link]](https://hal.inria.fr/hal-02568677)
 
 ## Compilation dependencies
 
@@ -36,7 +35,27 @@ There is a CMake option to disable the use of Cairo. Then no PDF is ever output.
 
 The basic usage is ``fill -p input_file -o output_file``.
 Without  ``-o`` just the PDF file ``input_file.pdf`` is generated (unless ``--no-pdf``).
+
+### Input format
+
+The ``input_file`` starts with the minimal and maximal allowed bead width.
+The rest is a sequence of polygonal closed curves.
+Each curve starts with the number of sample points (on one line).
+Then there is one sample per line.
+Each sample gives ``x, y``.
+
+### Output format
+
 The ``output_file`` is a (textual) sequence of print paths.
 Each print path start with the number of samples.
 Then there is one sample per line.
 Each sample gives ``x, y, radius (half width), tangent_x, tangent_y``.
+
+## Dataset
+
+The ``input/`` directory has some sample input files.
+
+The set of 300 input files in input/dataset/ is the one used in the paper and
+originates from the following work:
+
+> _A framework for adaptive width control of dense contour-parallel toolpaths in fused deposition modeling_. Tim Kuipers, Eugeni L. Doubrovski, Jun Wu, and Charlie C. L. Wang. 2020. [arXiv:2004.13497 [cs.GR]](https://arxiv.org/abs/2004.13497) In submission.
