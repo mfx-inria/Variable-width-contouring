@@ -1,0 +1,4 @@
+
+#if @NO_CAIRO_C_VALUE@
+  #define FILL_NO_CAIRO
+#endif
