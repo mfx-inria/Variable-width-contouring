@@ -1,9 +1,14 @@
 # Variable-width-contouring
 
-Code for the computing beads in a slice with varying width for minimizing underfill.
+Code for computing beads (aka toolpaths, print-paths, print-trajectories) in a slice with varying width for minimizing underfill.
 This is the code developed for the publication
 
-> _Variable-width contouring for additive manufacturing_. ACM Transactions on Graphics 39(4) (Proc. SIGGRAPH 2020) [[link]](https://hal.inria.fr/hal-02568677)
+> _Variable-width contouring for additive manufacturing_. Samuel Hornus, Tim Kuipers, Olivier Devillers, Monique Teillaud, Jonàs Martínez, Marc Glisse, Sylvain Lazard and Sylvain Lefebvre. ACM Transactions on Graphics 39(4) (Proc. SIGGRAPH 2020) [[link]](https://hal.inria.fr/hal-02568677)
+
+## Authors of the code
+
+- [Samuel Hornus](https://members.loria.fr/samuel.hornus/) (Inria, France)
+- [Tim Kuipers](https://kuipers.weblog.tudelft.nl/) (Ultimaker, TU Delft, Netherlands)
 
 ## Compilation dependencies
 

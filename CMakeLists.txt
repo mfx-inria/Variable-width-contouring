@@ -51,7 +51,11 @@ endif(NO_CAIRO)
 
 # ================================
 
-set(LIBS ${LIBS} "/opt/local/lib/libpolyclipping.dylib")
+if(APPLE)
+	set(LIBS ${LIBS} "/opt/local/lib/libpolyclipping.dylib")
+else(APPLE)
+	set(LIBS ${LIBS} "/usr/local/lib/libpolyclipping.so")
+endif(APPLE)
 
 #set_source_files_properties(${FILL_SOURCES} PROPERTIES COMPILE_FLAGS "${CPP11_FLAG}")
 
