@@ -10,6 +10,11 @@ This is the code developed for the publication
 - [Samuel Hornus](https://members.loria.fr/samuel.hornus/) (Inria, France)
 - [Tim Kuipers](https://kuipers.weblog.tudelft.nl/) (Ultimaker, TU Delft, Netherlands)
 
+## Visualization and analysis
+
+Code and scripts for visualizing and analyzing variable-width GCode can be
+found [here](https://github.com/BagelOrb/ToolpathVisualizer).
+
 ## Compilation dependencies
 
 	- CMAKE
