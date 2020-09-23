@@ -3,7 +3,7 @@
 #include "CairoSurface.h"
 
 extern bool gInnerUnderfill, gOuterUnderfill, gUnderfill;
-extern int gCurrentStep, gTotalSteps;
+extern int gTotalSteps;
 extern string gToolPos;
 
 void pathColor(int step_, bool voidArea_, cairo_t * context_) {
@@ -21,8 +21,10 @@ void pathColor(int step_, bool voidArea_, cairo_t * context_) {
 void errorColor(bool voidArea_, cairo_t * context_) {
 	if( voidArea_ )
 		cairo_set_source_rgb(context_, 0, 0, 0);
-	else
-		cairo_set_source_rgb(context_, 1.0, 170.0/255.0, 201.0/255.0);//1, 0.3, 0.3);
+	else {
+		cairo_set_source_rgb(context_, 1.0, 170.0/255.0, 201.0/255.0);
+		//cairo_set_source_rgb(context_, 1, 0.3, 0.3);
+	}
 }
 
 void trackColor(int step_, bool voidArea_, cairo_t * context_) {
@@ -116,7 +118,8 @@ fuse(const BBox & bbox,
 		const vector<vector<Sample>> & pts,
 		double min_radius,
 		double max_radius,
-		bool drawBisector
+		bool drawBisector,
+		int currentStep
 		)
 {
 	CairoSurface ma(bbox, "", min_radius, max_radius, fused.tight_, true);
@@ -143,7 +146,7 @@ fuse(const BBox & bbox,
 		contours.drawPaths(pts);
 	}
 	contours.step();
-	if( (! gUnderfill) || (gCurrentStep==gTotalSteps+1) ) {
+	if( (! gUnderfill) || (currentStep==gTotalSteps+1) ) {
 		cairo_set_source_surface(cr, contours.surface_, 0, 0);
 		cairo_paint(cr);
 		cairo_set_source_surface(cr, ma.surface_, 0.0, 0.0);
@@ -308,8 +311,8 @@ drawMA(const MATGraph& mat, bool noShave) {
 	double lw = lineWidthMultiplier_*bbox_.diagonal()/500.0;
 	const bool onlyTrimmed = true;
 	const bool allOthers = false;
-	mat.drawMedialAxis(context_, lw, drawMAVertices_, 2*max_radius, onlyTrimmed, noShave);
-	mat.drawMedialAxis(context_, lw, drawMAVertices_, 2*max_radius, allOthers, noShave);
+	mat.drawMedialAxis(context_, lw, drawMAVertices_, onlyTrimmed, noShave);
+	mat.drawMedialAxis(context_, lw, drawMAVertices_, allOthers, noShave);
 	cairo_restore(context_);
 }
 

@@ -77,7 +77,6 @@ protected:
 	void burnConcaveVertices();
 
 	void buildMAT(MATGraph& mat);
-	void splitApexes(MATGraph& mat);
 
 	bool isInputVertex(CGALgraph::Face_handle f) const;
 	Disk voronoiCircumcircle(const CGALgraph::Face_handle fh) const;
@@ -87,8 +86,6 @@ protected:
 
 private:
 	// helpers:
-
-	bool arcIsEE(const CGALgraph::Face_handle & fh, const int i) const;
 
 	bool arcIsDegenerate(const CGALgraph::Face_handle & fh, const int i) const;
 
@@ -126,7 +123,7 @@ void MATGraphBuilder::initialize(MATGraph& mat, const Paths & slice)
 	burnConcaveVertices();
 
 	buildMAT(mat);
-	splitApexes(mat);
+	mat.splitApexes();
 
 	this->delaunay = nullptr;
 }
@@ -170,7 +167,7 @@ void MATGraphBuilder::initialize(MATGraph& mat, const Paths & slice, const Paths
 	burnConcaveVertices();
 
 	buildMAT(mat);
-	splitApexes(mat);
+	mat.splitApexes();
 
 	this->delaunay = nullptr;
 }
@@ -196,87 +193,83 @@ void
 MATGraphBuilder::
 buildMAT(MATGraph& mat)
 {
-	std::unordered_map<CGALgraph::Face_handle, MATvert*> face_to_vert;
+	std::unordered_map<CGALgraph::Face_handle, MATvert *> face_to_vert;
+	// First, we create all the vertices of the MATGraph.
 	for ( auto it = delaunay->all_faces_begin(); it != delaunay->all_faces_end(); ++it ) {
-		if ( to_be_removed.count(it) > 0) continue; // don't copy edge into MATGraph
-
-		if ( delaunay->is_infinite(it) ) continue;
-
+		if ( to_be_removed.count(it) > 0) continue; // don't copy vertex into MATGraph
+		if ( delaunay->is_infinite(it) ) {
+			cerr << "FOUND AN INFINITE DELAUNAY FACE THAT IS NOT MARKED FOR REMOVAL !" << endl;
+			continue;
+		}
 		CGALgraph::Face_handle fh = it;
-
 		mat.verts.emplace_back(voronoiCircumcircle(it));
 		MATvert& vert = mat.verts.back();
-
+		face_to_vert.emplace(fh, &vert);
+	}
+	// Then, we connect them with half-arcs / edges
+	for ( auto it = delaunay->all_faces_begin(); it != delaunay->all_faces_end(); ++it ) {
+		if ( to_be_removed.count(it) > 0) continue; // don't copy vertex into MATGraph
+		if ( delaunay->is_infinite(it) ) continue;
+		CGALgraph::Face_handle fh = it;
+		MATvert * vert_ptr = face_to_vert[fh];
+		MATvert & vert = *vert_ptr;
 		for (int site_i = 0; site_i < 3; ++site_i)
 		{
 			CGALgraph::Face_handle nh = fh->neighbor(site_i);
-			if (to_be_removed.count(nh) > 0) {
-				            vert.edge[site_i].to_ = nullptr;
-				            vert.edge[site_i].twin_ = nullptr;
-			} else {
-				            vert.edge[site_i].site_ = toSite(fh->vertex(CGALgraph::ccw(site_i))->site());
-				auto neighbor_it = face_to_vert.find(nh);
-				if (neighbor_it != face_to_vert.end())
-				{
-					MATvert* neighbor_vert = neighbor_it->second;
-					vert.edge[site_i].twin_ = &neighbor_vert->edge[nh->index(fh)];
-					vert.edge[site_i].twin()->twin_ = &vert.edge[site_i];
-					vert.edge[site_i].to_ = neighbor_vert;
-					vert.edge[site_i].twin()->to_ = &vert;
-					EdgeType type;
-					if (vert.edge[site_i].site().is_point() != vert.edge[site_i].twin()->site().is_point()) type = EdgeType::VertEdge;
-					else if (vert.edge[site_i].site().is_point() && vert.edge[site_i].twin()->site().is_point()) type = EdgeType::VertVert;
-					else type = EdgeType::EdgeEdge;
-					vert.edge[site_i].twin()->type = vert.edge[site_i].type = type;
-				} else {
-					vert.edge[site_i].to_ = nullptr;
-				}
-			}
+			auto neighbor_it = face_to_vert.find(nh);
+			if (neighbor_it == face_to_vert.end()) continue;
+			if( nh < fh ) continue;
+			// Get the neighbor
+			MATvert * neighbor = neighbor_it->second;
+			// Create edge from vertex to neighbor
+			vert.edges_.emplace_back();
+			EdgeIterator edge = --(vert.edges_.end());
+			// Create edge from neighbor to vertex
+			neighbor->edges_.emplace_back();
+			// setup twin_ pointers
+			edge->twin_ = neighbor->edges_.end();
+			--edge->twin_;
+			edge->twin()->twin_ = edge;
+			// setup site_
+			edge->site_ = toSite(fh->vertex(CGALgraph::ccw(site_i))->site());
+			edge->twin()->site_ = toSite(fh->vertex(CGALgraph::cw(site_i))->site());
+			// setup to_ pointers
+			edge->to_ = neighbor;
+			edge->twin()->to_ = vert_ptr;
+			// compute arc type
+			EdgeType type;
+			if( edge->site().is_point() != edge->twin()->site().is_point() )
+				type = EdgeType::VertEdge;
+			else if( edge->site().is_point() && edge->twin()->site().is_point() )
+				type = EdgeType::VertVert;
+			else type = EdgeType::EdgeEdge;
+			// setup arc type
+			edge->twin()->type = edge->type = type;
 		}
-		face_to_vert.emplace(fh, &vert);
 	}
-}
-
-
-void
-MATGraphBuilder::
-splitApexes(MATGraph& mat)
-{
-	for ( MATvert & vert : mat.verts ) {
-		for ( int i = 0 ; i < 3 ; ++i ) {
-			if ( ! vert.has_neighbor(i) ) continue;
-			MATedge & edge = vert.edge[i];
-			if ( edge.to() < edge.from() ) continue; // arbitrary ordering to avoid unneeded apex twin ;)
-			if ( edge.type == EdgeType::EdgeEdge ) continue; // there is no apex
-
-			Vec2d a, b, base, x_dir;
-			if ( edge.type == EdgeType::VertVert ) {
-				a = edge.site().point();
-				b = edge.twin()->site().point();
-				base = b;
-				x_dir = (b - a).rotatedCCW();
-			} else {
-				assert(edge.type == EdgeType::VertEdge);
-				Site& point_site = edge.site().is_point() ? edge.site() : edge.twin()->site();
-				Site& segment_site = edge.site().is_point() ? edge.twin()->site() : edge.site();
-				a = point_site.point();
-				Vec2d sa = segment_site.source();
-				Vec2d sb = segment_site.destination();
-				x_dir = sb - sa;
-				b = Utils::project(a, sa, sb);
-				base = sa;
-			}
-			Utils::reduceVec(x_dir); // reduce magnitude without losing precision (by divisions by powers of 2)
-			double goes_left = x_dir.dot(vert.circumcircle.center_ - a);
-			double goes_right = x_dir.dot(edge.to()->circumcircle.center_ - a);
-			if( goes_left * goes_right < 0.0 ) { // otherwise apex is beyond the segment
-				Vec2d y_dir = x_dir.rotatedCCW();
-				y_dir.normalize();
-				Vec2d mid = 0.5 * (a + b);
-				double radius = y_dir.dot(a-base) * 0.5;
-				mat.insert(nullptr, edge, Disk(mid, std::fabs(radius)));
-			}
-		}
+	// Finally we make sure half-arcs are ordered CCW around each vertex
+	for ( auto fh = delaunay->all_faces_begin(); fh != delaunay->all_faces_end(); ++fh ) {
+		auto vit = face_to_vert.find(fh);
+		if( vit == face_to_vert.end() ) continue;
+		MATvert * v_ptr = vit->second;
+		MATvert & v = *v_ptr;
+		if( v.edges_.size() < 3 ) continue;
+		// So we can assume that we have a vertex of degree exactly 3 since CGAL produces at most
+		// that.
+		CGALgraph::Face_handle f0 = fh->neighbor(0);
+		CGALgraph::Face_handle f1 = fh->neighbor(CGALgraph::ccw(0));
+		MATvert * n0 = face_to_vert[f0];
+		MATvert * n1 = face_to_vert[f1];
+		EdgeIterator e0 = v.edges_.begin();
+		while( e0->to() != n0 ) e0++;
+		EdgeIterator e1 = e0;
+		e1++; if( e1 == v.edges_.end() ) e1 = v.edges_.begin();
+		if( e1->to() == n1 ) continue; // good ordering
+		e0 = v.edges_.begin(); e1 = e0; e1++;
+		//cerr << "FIRST AND 2nd = " << &(*v.edges_.begin()) << " and " << &(*(++v.edges_.begin())) << endl;
+		v.edges_.splice(e0, v.edges_, e1);
+		//cerr << "After swap:\n";
+		//cerr << "FIRST AND 2nd = " << &(*v.edges_.begin()) << " and " << &(*(++v.edges_.begin())) << endl;
 	}
 }
 
@@ -384,18 +377,6 @@ arcIsDegenerate(const CGALgraph::Face_handle & fh, const int i) const {
 	return
 		( p.is_segment() && q.is_point() && is_endpoint_of_segment(q, p) ) ||
 		( p.is_point() && q.is_segment() && is_endpoint_of_segment(p, q) );
-}
-
-
-bool
-MATGraphBuilder::
-arcIsEE(const CGALgraph::Face_handle & fh, const int i) const {
-	if( delaunay->is_infinite(fh) ) {
-		return false;
-	}
-	const Site_2 & p = fh->vertex(CGALgraph::cw(i))->site();
-	const Site_2 & q = fh->vertex(CGALgraph::ccw(i))->site();
-	return ( p.is_segment() && q.is_segment() );
 }
 
 

@@ -248,6 +248,14 @@ bool operator==(const Vec3<NT> & lhs, const Vec3<NT> & rhs)
 }
 
 template< typename NT >
+bool operator<(const Vec3<NT> & lhs, const Vec3<NT> & rhs)
+{ // LEXICOGRAPHIC LESS-COMPARISON
+    if( lhs.x() != rhs.x() ) return (lhs.x() < rhs.x());
+    if( lhs.y() != rhs.y() ) return (lhs.y() < rhs.y());
+    return (lhs.z() < rhs.z());
+}
+
+template< typename NT >
 Vec3<NT> orthonormalVector(const Vec3<NT> & v) {
   Vec3<NT> r = ( v.x() * v.x() + v.y() * v.y() > 1e-4 ) ?
     Vec3<NT>(v.y(), -v.x(), NT(0))

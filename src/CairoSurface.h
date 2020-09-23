@@ -28,7 +28,8 @@ class CairoSurface {
 			const vector<vector<Sample>> & pts,
 			double min_radius,
 			double max_radius,
-			bool drawBisector
+			bool drawBisector,
+			int currentStep
 			);
 	
 	void clear();

@@ -2,3 +2,7 @@
 #if @NO_CAIRO_C_VALUE@
   #define FILL_NO_CAIRO
 #endif
+
+#define FILL_MA_BOOST @BOOST_C_VALUE@
+
+#define FILL_MA_CGAL  @CGAL_C_VALUE@

@@ -16,12 +16,13 @@ simplifyMAGeometry(Components * components, bool onlyCollapsed) {
 	VertexSet to_remove;
 	auto do_the_job = [&](MATvert * vert) {
 		if( onlyCollapsed && ( ! vert->is_collapsed()) ) return;
-		MATedge * freeway, * deadend;
-		if( 1 != degree(vert, freeway, deadend, /*walk_on_fire*/true) ) return;
+		EdgeIterator freeway;
+		if( 1 != degree(vert, freeway, /*walk_on_fire*/true) ) return;
 		if( onlyCollapsed ) {
-			const int collapsedDeg = statusDegree(vert, MatStatus::Collapsed, freeway, deadend);
+			const int collapsedDeg = statusDegree(vert, MatStatus::Collapsed, freeway);
 			if( 1 != collapsedDeg ) return;
 		}
+		// Now we are sure that our vertex has degree-1, and is collapsed if required
 		MATvert * neighbor = freeway->to();
 		const int neighborCollapsedDeg = onlyCollapsed ? graph.statusDegree(neighbor, MatStatus::Collapsed) : degree(neighbor, true);
 		if( 3 > neighborCollapsedDeg ) return; // we don't want to get a lonely collapsed vertex.
@@ -66,14 +67,13 @@ simplifyMACombinatorics(Components * components) {
 	bool writeEOL(false);
 	for ( auto vertIt = graph.verts.begin(); vertIt != graph.verts.end(); ) {
 		MATvert * vert = &(*vertIt);
-		MATedge * freeway, * deadend;
-		if( 2 != degree(vert, freeway, deadend, true) ) {
+		EdgeIterator freeway;
+		if( 2 != degree(vert, freeway, true) ) {
 			goto nextVert;
-		} else {
-			int i(0);
-			while( & vert->edge[i] != deadend ) ++i;
-			MATedge * out0 = & vert->edge[(i+1)%3];
-			MATedge * out1 = & vert->edge[(i+2)%3];
+		} else { // the vertex has degree 2 (including all labels), we check if
+			// we can delete if if it is redundant.
+			EdgeIterator out0 = vert->edges_.begin();
+			EdgeIterator out1 = out0; out1++;
 			if( out0->to()->status != vert->status ) goto nextVert;
 			if( out1->to()->status != vert->status ) goto nextVert;
 			if( maoi_->hasBoundary(*out0) ) goto nextVert;
@@ -592,21 +592,22 @@ VariableWidthContouring::
 initializeTargets(bool walk_on_fire) {
 	for( MATvert & vert_ : graph.verts) {
 		MATvert * vert = & vert_;
+		//Vec2d pos = vert->circumcircle.center_;
+		//bool debug = (pos.x() > -8.0) && (pos.x() < -7.0) && (pos.y() > 12.0) && (pos.y() < 13.0);
+		//if( debug ) cerr << "Init targets " << (walk_on_fire?"on fire":"on normal") << " at " << pos;
 		vert->targets_.clear();
 		const int deg = degree(vert, walk_on_fire);
 		bool addTarget = (1 == deg) && (!walk_on_fire || vert->is_collapsed());
+		//if( debug ) cerr << ". degree=" << deg << ". 1st test: " << addTarget;
 		if( (! addTarget) && (! walk_on_fire) && (2 <= deg) ) {
-			for( int i(0); i < 3; ++i ) {
-				if( ! vert->edge[i].to() ) continue;
-				if( vert->edge[i].to()->is_destroyed() ) continue;
-				if( ! maoi_->hasToTheRightBoundary(vert->edge[i]) ) continue;
-				if( 3 == deg ) {
-					cerr << "I FOUND A DEGREE-3 NORMAL VERTEX THAT NEED A TARGET ! at pos " << vert->pos() << endl;
-				}
-				// We have a protruding ToTheRight boundary circle at a normal-degree 2 vertex. Must add it as a target
+			for( EdgeIterator edge = vert->edges_.begin(); edge != vert->edges_.end(); ++edge ) {
+				if( edge->to()->is_destroyed() ) continue;
+				if( ! maoi_->hasToTheRightBoundary(*edge) ) continue;
+				// We have a protruding ToTheRight boundary circle at a normal, degree>=2 vertex. Must add it as a target
 				// FIXME: should we also do it when walk[ing]_on_fire?
 				addTarget = true;
 			}
+			//if( debug ) cerr << ". 2nd test: " << addTarget;
 		}
 		if( addTarget ) {
 			if( walk_on_fire ) { // reset the fullyCleared_ flag
@@ -617,6 +618,7 @@ initializeTargets(bool walk_on_fire) {
 			vert->targets_.emplace_back(vert->circumcircle, targetRadius);
 			vert->targets_.back().vertexSource = vert;
 		}
+		//if( debug ) cerr << endl;
 	}
 }
 
@@ -646,8 +648,8 @@ trimLeafs(bool trimVertices) {
 		//bool debug = vert->pos().x() > 55 && vert->pos().x() < 56 && vert->pos().y() > 998 && vert->pos().y() < 1000;
 
 		if ( vert->targets_.empty() ) continue;
-		MATedge * freeway, * deadend;
-		int deg = degree(vert, freeway, deadend); // degree == 1 in general so freeway != nullptr
+		EdgeIterator freeway;
+		int deg = degree(vert, freeway); // degree == 1 in general so freeway != vert->edges_.end()
 		if( 1 < deg ) {
 			cerr << "ERROR: having a leaf with degree " << deg << " > 1. BUG." << endl;
 			exit(-1);
@@ -665,7 +667,7 @@ trimLeafs(bool trimVertices) {
 		if( debug ) cerr << "Trimming... have " << vert->targets_.size() << " targets." << endl;
 		firstCleared = trimArcToTarget(*freeway, vert->targets_, trim, trimmed);
 		if( trimmed ) { // we succesfully found a position along the branch |freeway| where we can trim the branch
-			MATvert & inserted_vert = graph.insert(currentComponent_, *freeway, trim);
+			MATvert & inserted_vert = graph.insert(currentComponent_, freeway, trim);
 			if( firstCleared != nullptr ) {
 				firstCleared->fullyCleared_ = true;
 				if( debug ) cerr << "[TrimFullyCleared at "<<firstCleared->pos()<<"]";
@@ -763,7 +765,7 @@ collapse(vector<Disk> & cheekPrecursors, bool sharpCut) {
 	unordered_set< MATvert * > & component_verts = currentComponent_->vertexSet;
 
 	vector<MATvert *> to_add_in_component;
-	stack< MATedge * > to_check;
+	stack<EdgeIterator> to_check;
 
 	auto checkTargets = [&](MATvert * vert) {
 		if( ! vert->is_trimmed() ) return;
@@ -772,15 +774,14 @@ collapse(vector<Disk> & cheekPrecursors, bool sharpCut) {
 		}
 	};
 
-	auto markCollapsedAndPropagate = [&](MATedge * edge) { // Propagate collapse
+	auto markCollapsedAndPropagate = [&](EdgeIterator edge) { // Propagate collapse
 		MATvert * to = edge->to();
 		assert(to->circumcircle.radius_ <= maxCollapseRadius());
 		to->collapse();
-		for ( int i = 0 ; i < 3 ; ++i ) {
-			if( ! to->has_neighbor(i) ) continue;
-			if( to->edge[i].to()->is_collapsed() ) continue; // already collapsed
-			if( & to->edge[i] == edge->twin() ) continue; // don't go back!
-			to_check.emplace( & to->edge[i] );
+		for( EdgeIterator e = to->edges_.begin(); e != to->edges_.end(); ++e ) {
+			if( e->to()->is_collapsed() ) continue; // already collapsed
+			if( e == edge->twin() ) continue; // don't go back!
+			to_check.push(e);
 		}
 	};
 
@@ -800,14 +801,13 @@ collapse(vector<Disk> & cheekPrecursors, bool sharpCut) {
 		if( debug ) cerr << "[Collapse] Initiated at " << vert->pos() << endl;
 
 		assert(to_check.empty());
-		for ( int i = 0 ; i < 3 ; ++i ) {
-			if ( ! vert->has_neighbor(i) ) continue;
-			if ( vert->edge[i].to()->is_collapsed() ) continue; // already collapsed
-			to_check.push(& vert->edge[i]);
+		for( EdgeIterator e = vert->edges_.begin(); e != vert->edges_.end(); ++e ) {
+			if ( e->to()->is_collapsed() ) continue; // already collapsed
+			to_check.push(e);
 		}
 
 		while( ! to_check.empty() ) {
-			MATedge * edge = to_check.top(); to_check.pop();
+			EdgeIterator edge = to_check.top(); to_check.pop();
 			if( edge->to()->is_collapsed() ) continue; // avoid going around in circles
 
 			// FIXME: maybe a fixme... I comment the line because AFAIK, no target should be cleared at this point.
@@ -839,7 +839,7 @@ collapse(vector<Disk> & cheekPrecursors, bool sharpCut) {
 					if( debug ) {
 						cerr << "Found cut point at " << disk.center_ << "(r=" << disk.radius_ << endl;
 					}
-					graph.insert(nullptr, *edge, disk);
+					graph.insert(nullptr, edge, disk);
 					to_add_in_component.push_back(edge->to());
 					if( sharpCut ) continue;
 				} else {
@@ -882,10 +882,10 @@ collapse(vector<Disk> & cheekPrecursors, bool sharpCut) {
 			}
 			if( (goodGradientPos >= 0) && ( (maxRadiusPos < 0) || (goodGradientPos < maxRadiusPos) ) ) {
 				//cerr << "Good gradient at " << edge->from()->pos() << endl;
-				graph.insert(nullptr, *edge, goodGradientDisk);
+				graph.insert(nullptr, edge, goodGradientDisk);
 			} else if( maxRadiusPos >= 0.0 ) {
 				if( maxRadiusPos > 0.0 ) {
-					graph.insert(nullptr, *edge, maxRadiusDisk);
+					graph.insert(nullptr, edge, maxRadiusDisk);
 				}
 			} else {
 				markCollapsedAndPropagate(edge);
@@ -926,7 +926,7 @@ void
 VariableWidthContouring::
 clipAndShaveCollapsedParts(Components & components, bool noShaving) {
 	initializeTargets(/*walk_on_fire*/true);
-	list<MATedge *> shavingPropagations;
+	list<EdgeIterator> shavingPropagations;
 
 	vector<MATvert *> to_add_in_component;
 	for ( Component & component : components ) {
@@ -934,14 +934,12 @@ clipAndShaveCollapsedParts(Components & components, bool noShaving) {
 		for ( MATvert * vert : component.vertexSet ) {
 			if ( ! vert->is_collapsed() ) continue;
 			// Check for Normal neighbors for the clipping process.
-			for ( int i = 0 ; i < 3 ; ++i ) {
-				if( ! vert->has_neighbor(i) ) continue;
-				MATvert * neighbor = vert->edge[i].to();
+			for( EdgeIterator edge = vert->edges_.begin(); edge != vert->edges_.end(); ++edge ) {
+				MATvert * neighbor = edge->to();
 				if( ! neighbor->is_normal() ) continue;
-				MATedge * edge = & vert->edge[i];
 				// Compute |nextEdge| which support the ToTheRight boundary circle
 				// out of which the collapsed part stems.
-				MATedge * nextEdge = edge->nextNormalOrTwin(); // could be any edge whose from() is |neighbor|
+				EdgeIterator nextEdge = edge->nextNormalOrTwin(); // could be any edge whose from() is |neighbor|
 				assert(nextEdge->from()->is_normal());
 				// we don't assert(nextEdge->to()->is_normal()) because
 				// it is possible that edge->to() == nextEdge->from() is a lonely
@@ -969,8 +967,8 @@ clipAndShaveCollapsedParts(Components & components, bool noShaving) {
 			if( ! vert->targets_.empty() ) {
 				if( vert->targets_[0].isClipping ) continue;
 				if( debug ) cerr << "have some." << endl;
-				MATedge * freeway, * deadend;
-				const int deg = degree(vert, freeway, deadend, /*walk_on_fire*/true);
+				EdgeIterator freeway;
+				const int deg = degree(vert, freeway, /*walk_on_fire*/true);
 				if(debug && 1 != deg) {
 					cerr << "!!! " << deg << " at " << vert->pos() << endl;
 				}
@@ -1003,9 +1001,14 @@ clipAndShaveCollapsedParts(Components & components, bool noShaving) {
 
 void
 VariableWidthContouring::
-clip(MATedge * edge, const Target & clippingTarget, vector<MATvert *> & to_add_in_component) {
+clip(EdgeIterator edge, const Target & clippingTarget, vector<MATvert *> & to_add_in_component) {
 	//bool debug = true;
-	set<MATedge *> props;
+	struct EIComp {
+		bool operator()(const EdgeIterator & left, const EdgeIterator & right) const {
+			return &(*left) < &(*right);
+		};
+	};
+	set<EdgeIterator,EIComp> props;
 	vector<Target> vt = {clippingTarget};
 	const Disk & clipDisk = clippingTarget.medialAxisDisk;
 	while( true ) {
@@ -1028,7 +1031,7 @@ clip(MATedge * edge, const Target & clippingTarget, vector<MATvert *> & to_add_i
 				inserted_vert = edge->to();
 				if( debug ) cerr << "Forgetting about " << inserted_vert->pos() << endl;
 			} else {
-				inserted_vert = & graph.insert(nullptr, *edge, newDisk);
+				inserted_vert = & graph.insert(nullptr, edge, newDisk);
 				to_add_in_component.push_back(inserted_vert);
 			}
 			if( 10 == degree(inserted_vert, true) )
@@ -1042,11 +1045,10 @@ clip(MATedge * edge, const Target & clippingTarget, vector<MATvert *> & to_add_i
 				cerr << "CLIP-PROPAG At(" << to->pos() << ",R=" << to->radius() << ')';
 			}
 			to->shave();
-			for ( int i = 0 ; i < 3 ; ++i ) {
-				if( ! to->has_neighbor(i) ) continue;
-				if( ! to->edge[i].to()->is_collapsed() ) continue; // already collapsed
-				if( & to->edge[i] == edge->twin() ) continue; // don't go back!
-				props.insert( & to->edge[i] );
+			for ( EdgeIterator e = to->edges_.begin(); e != to->edges_.end(); ++e ) {
+				if( ! e->to()->is_collapsed() ) continue; // already collapsed
+				if( e == edge->twin() ) continue; // don't go back!
+				props.insert(e);
 			}
 		}
 		if( debug ) cerr << endl;
@@ -1057,14 +1059,14 @@ clip(MATedge * edge, const Target & clippingTarget, vector<MATvert *> & to_add_i
 
 void
 VariableWidthContouring::
-shaveLeafs(list<MATedge *> & propagations) {
+shaveLeafs(list<EdgeIterator> & propagations) {
 	if( debug ) {
 		cerr << "We have " << propagations.size() << " propagations.\n";
 		for( auto & l : propagations ) cerr << l->from()->circumcircle.center_ << " -- ";
 		cerr << endl;
 	}
 	while( ! propagations.empty() ) {
-		MATedge * edge = propagations.back(); propagations.pop_back();
+		EdgeIterator edge = propagations.back(); propagations.pop_back();
 		MATvert * vert = edge->from();
 		MATvert * neighbor = edge->to();
 		//bool debug = (vert->pos().x() > 21)&&(vert->pos().x() < 22) &&
@@ -1081,8 +1083,8 @@ shaveLeafs(list<MATedge *> & propagations) {
 			cerr << "COLLAPSED OOPS" << endl;
 			exit(-1);
 		}
-		MATedge * freeway, * deadend;
-		if( 0 == statusDegree(vert, MatStatus::Collapsed, freeway, deadend) ) continue;
+		EdgeIterator freeway;
+		if( 0 == statusDegree(vert, MatStatus::Collapsed, freeway) ) continue;
 
 		bool shaved(false);
 		Disk shaveDisk;
@@ -1096,7 +1098,7 @@ shaveLeafs(list<MATedge *> & propagations) {
 			if( (shaveDisk.center_ - edge->to()->pos()).squaredLength() < 1e-8 ) {
 				inserted_vert = edge->to();
 			} else {
-				inserted_vert = & graph.insert(currentComponent_, *edge, shaveDisk);
+				inserted_vert = & graph.insert(currentComponent_, edge, shaveDisk);
 			}
 			inserted_vert->collapse();
 			MATvert * v= firstClearedTarget->vertexSource;
@@ -1110,8 +1112,8 @@ shaveLeafs(list<MATedge *> & propagations) {
 			if( degree(vert, /*walk_on_fire*/true) > 0 ) { vert->shave(); }
 			if( ! neighbor->is_collapsed() ) goto clean_targets;
 			if( debug ) cerr << "--nei is collapsed, ";
-			MATedge * freeway, * deadend;
-			int neighbor_degree = statusDegree(neighbor, MatStatus::Collapsed, freeway, deadend);
+			EdgeIterator freeway;
+			int neighbor_degree = statusDegree(neighbor, MatStatus::Collapsed, freeway);
 			if( neighbor_degree >= 1 ) {
 				Targets & nt = neighbor->targets_;
 				nt.insert(nt.end(), vert->targets_.begin(), vert->targets_.end());
@@ -1148,8 +1150,8 @@ removeAllBranches() {
 	while( ! leafs.empty() ) {
 		MATvert * vert = leafs.back();
 		leafs.pop_back();
-		MATedge * freeway, * deadend;
-		int deg = degree(vert, freeway, deadend); // degree == 1 in general so freeway != nullptr
+		EdgeIterator freeway;
+		int deg = degree(vert, freeway); // degree == 1 in general so freeway != nullptr
 		if( 1 < deg ) {
 			cerr << "ERROR: having a leaf with degree " << deg << " > 1. BUG." << endl;
 			exit(-1);

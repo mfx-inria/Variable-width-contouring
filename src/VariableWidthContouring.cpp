@@ -27,10 +27,10 @@ computeBBox() const {
 
 void
 VariableWidthContouring::
-gatherCollapsedSegment(const MATedge * edge, const MATedge * & limit, CollapsedAxis & axis) const {
+gatherCollapsedSegment(EdgeIterator edge, EdgeIterator & limit, CollapsedAxis & axis) const {
 	//cerr << "Entering axis at " << edge->from()->pos() << " --> " << edge->to()->pos() << endl;
 	// First, skip the shaved vertices until the collapsed region
-	const MATedge * e = edge;
+	EdgeIterator e = edge;
 	MATvert * from = e->from();
 	MATvert * to = e->to();
 	bool axisCreated(false);
@@ -99,15 +99,15 @@ advance:
 }
 
 void
-MAOffsetInfo::
-swap(MAOffsetInfo & other) {
+BoundaryCircles::
+swap(BoundaryCircles & other) {
 	lBoundary_.swap(other.lBoundary_);
 	rBoundary_.swap(other.rBoundary_);
 }
 
 void
 VariableWidthContouring::
-setWorkingMAOffsetInfo(MAOffsetInfo * i) {
+setWorkingBoundaryCircles(BoundaryCircles * i) {
 	maoi_ = i;
 }
 
@@ -218,7 +218,7 @@ findPointAtDistance(const MATedge& edge, double dist, Disk & disk) const
 // call this function.
 void
 VariableWidthContouring::
-computeSmoothPaths(const Component & component, SmoothPaths & out, bool walk_on_fire, MAOffsetInfo * maoi) const {
+computeSmoothPaths(const Component & component, SmoothPaths & out, bool walk_on_fire, BoundaryCircles * maoi) const {
 	if( graph.verts.empty() ) {
 		return;
 	}
@@ -226,11 +226,11 @@ computeSmoothPaths(const Component & component, SmoothPaths & out, bool walk_on_
 		maoi = maoi_;
 	}
 
-	NewCycleFunction newCycle = [&](const MATedge * prev, const MATvert * vert, const MATedge * e) {
+	NewCycleFunction newCycle = [&](ConstEdgeIterator prev, const MATvert * vert, ConstEdgeIterator e) {
 		out.emplace_back();
 	};
 
-	WalkFunction walkEdge = [&](const MATedge * edge, const MATvert * vert, const MATedge * nextEdge) {
+	WalkFunction walkEdge = [&](ConstEdgeIterator edge, const MATvert * vert, ConstEdgeIterator nextEdge) {
 		// |vert| is |edge->to()|
 		const Site& curr_site = edge->site();
 		const Site& next_site = nextEdge->site();
@@ -255,13 +255,12 @@ computeSmoothPaths(const Component & component, SmoothPaths & out, bool walk_on_
 			//}
 			if( 0 == d ) {
 				// Since we don't know which adjacent edge will by processed, we put the boundary disk
-				// on all three *outgoing* edges. No risk, since the vertex is disconnected (degree 0)
-				for( int i = 0; i < 3; ++i ) {
-					const MATedge * e = & vert->edge[i];
-					maoi->rBoundary_[e] = Disk(maximalDisk.center_, radius);
-				}
+				// on all *outgoing* edges. No risk, since the vertex is disconnected (degree 0)
+				vert->iter_edges([&](ConstEdgeIterator e) {
+					maoi->rBoundary_[&(*e)] = Disk(maximalDisk.center_, radius);
+				});
 			} else {
-				maoi->rBoundary_[nextEdge] = Disk(maximalDisk.center_, radius);
+				maoi->rBoundary_[&(*nextEdge)] = Disk(maximalDisk.center_, radius);
 			}
 			if ( ! out.back().empty() && out.back().back() == bc) {
 				std::cerr << "Warning: trying to put the same circle in the path twice!\n";
@@ -274,35 +273,28 @@ computeSmoothPaths(const Component & component, SmoothPaths & out, bool walk_on_
 			double r = distanceToBoundary(*edge, maximalDisk.center_) - maximalDisk.radius_;
 			if( walk_on_fire && vert->is_normal() ) r -= component.uniformOffset;
 			BoundaryCircle bc(ToTheLeft, next_site.point(), r);
-			maoi->lBoundary_[nextEdge] = Disk(next_site.point(), r);
+			maoi->lBoundary_[&(*nextEdge)] = Disk(next_site.point(), r);
 			assert(out.back().empty() || out.back().back() != bc);
 			out.back().push_back(bc);
 		}
-		return nullptr;
 	};
 
 	ArcToInt visited;
 	
-	auto walkTheMedialAxis = [&](const MATedge * edge) {
-		const MATedge * e = edge;
-	};
-
 	for( const MATvert * vert : component.vertexSet) {
 		if( (!walk_on_fire) && vert->is_destroyed() ) continue;
 		int deg = degree(vert, walk_on_fire);
 		if( 0 == deg ) {
-			newCycle(&vert->edge[0], vert, &vert->edge[0]);
-			walkEdge(& vert->edge[0], vert, & vert->edge[0]);
+			newCycle(vert->edges_.begin(), vert, vert->edges_.begin());
+			walkEdge(vert->edges_.begin(), vert, vert->edges_.begin());
 		} else {
-			for( int i(0); i < 3; ++i ) {
-				if( ! vert->has_neighbor(i) ) continue;
-				const MATedge * edge = & vert->edge[i];
+			for( ConstEdgeIterator edge = vert->edges_.begin(); edge != vert->edges_.end(); ++edge ) {
 				if( ( ! walk_on_fire ) && edge->to()->is_destroyed() ) continue;
-				if( visited.find(edge) != visited.end() ) continue;
+				if( visited.find(&(*edge)) != visited.end() ) continue;
 				newCycle(edge->prev(walk_on_fire), vert, edge);
-				while( visited.find(edge) == visited.end() ) {
-					visited[edge] = 1;
-					const MATedge * nextEdge = edge->next(walk_on_fire);
+				while( visited.find(&(*edge)) == visited.end() ) {
+					visited[&(*edge)] = 1;
+					ConstEdgeIterator nextEdge = edge->next(walk_on_fire);
 					walkEdge(edge, edge->to(), nextEdge);
 					edge = nextEdge;
 				}
@@ -314,20 +306,20 @@ computeSmoothPaths(const Component & component, SmoothPaths & out, bool walk_on_
 int
 VariableWidthContouring::
 degree(const MATvert * vert, bool walk_on_fire) const {
-	MATedge * freeway, * deadend;
-	return graph.degree(vert, freeway, deadend, walk_on_fire);
+	EdgeIterator freeway;
+	return graph.degree(vert, freeway, walk_on_fire);
 }
 
 int
 VariableWidthContouring::
-degree(const MATvert * vert, MATedge *& freeway, MATedge *& deadend, bool walk_on_fire) const {
-	return graph.degree(vert, freeway, deadend, walk_on_fire);
+degree(const MATvert * vert, EdgeIterator & freeway, bool walk_on_fire) const {
+	return graph.degree(vert, freeway, walk_on_fire);
 }
 
 int
 VariableWidthContouring::
-statusDegree(const MATvert * vert, MatStatus status, MATedge *& freeway, MATedge *& deadend) const {
-	return graph.statusDegree(vert, status, freeway, deadend);
+statusDegree(const MATvert * vert, MatStatus status, EdgeIterator & freeway) const {
+	return graph.statusDegree(vert, status, freeway);
 }
 
 MATvert * closest(const Vec2d & query, const std::vector<MATvert *> & pts) {
@@ -354,17 +346,15 @@ filterSmallFeatures(double min_radius, Components & components)
 		vector<MATvert *> toAdd;
 		std::vector<MATvert *> localMinimas;
 		std::vector<MATvert *> ends;
-		for( auto vert_ : component.vertexSet ) {
+		for( MATvert * vert_ : component.vertexSet ) {
 			MATvert & vert = *vert_;
 			double vrad = vert.radius();
 			bool local_minima = true;
-			for( int i = 0 ; i < 3 ; ++i ) {
-				if( ! vert.has_neighbor(i) ) continue;
-				MATedge & edge = vert.edge[i];
-				if( vrad > edge.to()->radius() ) local_minima = false;
-				if( edge.to() < edge.from() ) continue; // arbitrary order to prevent double handling of half-edges
+			for( EdgeIterator edge = vert.edges_.begin(); edge != vert.edges_.end(); ++edge ) {
+				if( vrad > edge->to()->radius() ) local_minima = false;
+				if( edge->to() < edge->from() ) continue; // arbitrary order to prevent double handling of half-edges
 				Disk disk;
-				if( findPointAtDistance(edge, min_radius, disk) > 0.0 ) {
+				if( findPointAtDistance(*edge, min_radius, disk) > 0.0 ) {
 					MATvert * v = & graph.insert(nullptr, edge, disk);
 					ends.push_back(v);
 					toAdd.push_back(v);

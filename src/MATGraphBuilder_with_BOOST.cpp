@@ -1,3 +1,4 @@
+/* vim: set sts=0 ts=4 sw=4 noet tw=0 : */
 
 #include <boost/polygon/voronoi.hpp>
 
@@ -53,19 +54,27 @@ namespace boost {
 }  // boost
 
 Vec2i convert2d22i(const Vec2d & v) {
-    Vec2d vv = 1000.0 * v;
+    Vec2d vv = 1024.0 * v;
     return Vec2i(static_cast<int>(round(vv.x())), static_cast<int>(round(vv.y())));
 }
+
+using VD = voronoi_diagram<double>;
+using VPtr = const VD::vertex_type *;
+using EPtr = const VD::edge_type *;
+using CPtr = const VD::cell_type *;
+
+void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths);
 
 void buildMATGraphWithBOOST(MATGraph& mat, const Paths & inputPoly) {
     // For now we ASSUME the input is in MILLImeters and we convert to INTEGER MICROmeter
     if (inputPoly.empty()) return;
 
-    // Clean the input
+    // Scale and fix the input
     CLPaths paths;
 
     for( const auto & path : inputPoly ) {
         const size_t N = path.size();
+		//cerr << "IN PATH OF SIZE " << N << endl;
         if( N < 3 ) continue;
         paths.emplace_back();
         CLPath & p = paths.back();
@@ -74,12 +83,19 @@ void buildMATGraphWithBOOST(MATGraph& mat, const Paths & inputPoly) {
             p.emplace_back(v.x(), v.y());
         }
     }
-    ClipperLib::SimplifyPolygons(paths, ClipperLib::pftNonZero);
+	ClipperLib::SimplifyPolygons(paths, ClipperLib::pftEvenOdd);
+	buildMATGraphWithBOOST(mat, paths);
+}
 
+void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths) {
+	if( paths.empty() ) return;
     // Go
     std::vector<Segment> segments;
     for( const auto & path : paths ) {
         const size_t N = path.size();
+		//cerr << "OUT PATH OF SIZE " << N << endl;
+		// We always insert loops.
+		// So any point is adjacent to an even number of edges (unless degenerate cases).
         CLPoint p0 = path[N-1];
         for( const auto & p : path ) {
             CLPoint p1 = p;
@@ -87,91 +103,232 @@ void buildMATGraphWithBOOST(MATGraph& mat, const Paths & inputPoly) {
             p0 = p1;
         }
     }
-    using VD = voronoi_diagram<double>;
+
+	auto isPointSite = [&](CPtr cell) -> bool {
+		// FIXME: is it equivalent to cell->contains_point()?
+		// if so, use it.
+		if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_START_POINT) {
+			return true;
+		} else if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_END_POINT) {
+			return true;
+		}
+		return false;
+	};
+
+	auto toSite = [&](CPtr cell) {
+		std::size_t index = cell->source_index();
+		const Segment & s = segments[index];
+		Vec2i p0 = boost::polygon::low(s);
+		Vec2d p0d = (1.0 / 1024.0) * Vec2d(p0.x(), p0.y());
+		Vec2i p1 = boost::polygon::high(s);
+		Vec2d p1d = (1.0 / 1024.0) * Vec2d(p1.x(), p1.y());
+		if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_START_POINT) {
+			return Site(p0d);
+		} else if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_END_POINT) {
+			return Site(p1d);
+		}
+		return Site(p0d, p1d);
+	};
+
+    auto voronoiCircumcircle = [&](const VPtr v) -> Disk {
+        Vec2d p = (1.0 / 1024.0) * Vec2d(v->x(), v->y());
+        EPtr first_edge = v->incident_edge();
+        EPtr edge = first_edge;
+        do {
+            CPtr cell = edge->cell();
+            std::size_t index = cell->source_index();
+            const Segment & s = segments[index];
+			Site site = toSite(cell);
+			if( site.is_point() )
+				return Disk(p, (p-site.point()).length());
+            edge = edge->rot_next();
+        } while( edge != first_edge );
+        CPtr cell = edge->cell();
+        std::size_t index = cell->source_index();
+        const Segment & s = segments[index];
+        Vec2d p0d = (1.0 / 1024.0) * Vec2d(s.p0.x(), s.p0.y());
+        Vec2d p1d = (1.0 / 1024.0) * Vec2d(s.p1.x(), s.p1.y());
+        return Disk(p, Utils::distanceToLine(p, p0d, p1d-p0d));
+    };
+
+    auto printV = [](const VD::vertex_type * v) {
+        cerr << '(' << (v->x()/1024.0) << ", " << (v->y()/1024.0) << ')';
+    };
+
+    auto analyze = [&](const VD::vertex_type * v, bool & is_input, int & degree, int & n_secondaries) {
+		const EPtr first_edge = v->incident_edge();
+		EPtr edge = first_edge; // iterate over outgoing edges
+		n_secondaries = degree = 0;
+		is_input = false;
+		do {
+			degree++;
+			if( edge->is_secondary() ) n_secondaries++;
+			CPtr cell = edge->cell();
+			std::size_t index = cell->source_index();
+			const Segment & s = segments[index];
+			if( (v->x() == s.p0.x()) && (v->y() == s.p0.y()) ) is_input = true;
+			if( (v->x() == s.p1.x()) && (v->y() == s.p1.y()) ) is_input = true;
+            edge = edge->rot_next();
+		} while( edge != first_edge );
+	};
+
     VD vd;
     construct_voronoi(segments.begin(), segments.end(), &vd);
+    //cerr << "BOOST Voronoi built over " << segments.size() << " input segments\n";
 
-    // Color the vertices
-    int color = 0;
-    int outside_flag = -1;
-    using VPtr = const VD::vertex_type *;
-    VPtr curv = & vd.vertices().front();
-    curv->color(2); // color = 2 * visited + in/out flag
+	// Find start vertex
+    VPtr curv = nullptr;
+    const int outside_flag = 1; // we currently don't know the color of the "outside" vertices. so we store -1
+    const int inside_flag = 1 - outside_flag;
+	int start_flag;
+
+	for ( auto it = vd.vertices().begin(); it != vd.vertices().end(); ++it ) {
+		VPtr v = &(*it);
+		EPtr first_edge = v->incident_edge();
+		EPtr edge = first_edge; // iterate over outgoing edges
+		do {
+			if( ! edge->is_infinite() ) {
+				edge = edge->rot_next();
+				continue;	
+			}
+			curv = v;
+			start_flag = edge->is_secondary() ? inside_flag : outside_flag;
+			break;
+		} while( edge != first_edge );
+		if( curv ) break;
+	}
+
+	assert(curv != nullptr);
+	//cerr << "START VERTEX IS "; printV(curv); cerr << endl;
+
+    // Flag the vertices
+    curv->color(2+start_flag); // color = 2 * visited + in/out flag // visited=1, color=0
     stack<VPtr> visitee;
     while( true ) {
-        const voronoi_diagram<double>::edge_type * edge = curv->incident_edge();
+		int degree, n_sec; bool is_input;
+		analyze(curv, is_input, degree, n_sec);
+		//cerr << "VISITING "; printV(curv); cerr << (is_input?" INPUT":" INTERNAL") << ", deg=" << degree << ", n_sec=" << n_sec << endl;
+        EPtr edge = curv->incident_edge();
         int flag = curv->color() % 2;
-        do {
-            VPtr nv = edge->vertex1();
-            if( nv == curv ) { cerr << "ERROR"; continue; }
-            if( nullptr == nv ) {
-                int new_outside = edge->is_primary() ? flag : (1-flag);
-                //cerr << "Outside would be " << new_outside << " at " << curv->x() << ", " << curv->y()
-                //    << endl;
-                if( outside_flag != -1 && outside_flag != new_outside ) {
-                    cerr << "YAK " << outside_flag << ' ' << new_outside << endl;
-                }
-                outside_flag = new_outside;
-                edge = edge->rot_next();
-                continue;
-            }
-            if( nv->color() / 2 == 1 ) {
-                edge = edge->rot_next();
-                continue;
-            }
-            visitee.push(nv);
-            if( edge->is_primary() ) {
-                nv->color(2 + flag);
-            } else {
-                nv->color(2 + 1 - flag);
-            }
-            edge = edge->rot_next();
-        } while (edge != curv->incident_edge());
+		if( is_input && (n_sec == 0) ) {
+			assert(degree % 2 == 0);
+			curv->color(2+inside_flag);
+			int fl = -1;
+			EPtr start = curv->incident_edge();
+			do {
+				VPtr nv = start->vertex1();
+				assert( nv != nullptr );
+				int scol = nv->color();
+				if( scol / 2 == 1 ) { // already visited?
+					fl = scol % 2;
+					break;
+				}
+				start = start->rot_next();
+			} while (start != curv->incident_edge());
+			assert( fl != -1 );
+			edge = start;
+			do {
+				VPtr nv = edge->vertex1();
+				assert( nv != nullptr );
+				if( nv->color() / 2 == 1 ) { // already visited?
+					assert( nv->color() % 2 == fl );
+					edge = edge->rot_next();
+					fl = 1 - fl;
+					continue;
+				}
+				nv->color(2+fl);
+				visitee.push(nv);
+				fl = 1 - fl;
+				edge = edge->rot_next();
+			} while (edge != start );
+		} else {
+			do {
+				VPtr nv = edge->vertex1();
+				if( nv == curv ) { cerr << "SELF-LOOP ERROR"; exit(-1); }
+				if( (nullptr == nv) || (nv->color() / 2 == 1) ) { // |nv| infinite or already visited?
+					edge = edge->rot_next();
+					continue;
+				}
+				visitee.push(nv);
+				if( edge->is_primary() ) {
+					nv->color(2 + flag);
+				} else {
+					//cerr << "SECONDARY EDGE from "; printV(curv);
+					//cerr << " to "; printV(nv); cerr << endl;
+					nv->color(2 + 1 - flag);
+				}
+				edge = edge->rot_next();
+			} while (edge != curv->incident_edge());
+		}
         if( visitee.empty() ) break;
         curv = visitee.top();
         visitee.pop();
     }
     //cerr << "Outside flag is " << outside_flag << endl;
     if( outside_flag == -1 ) { cerr << "outside flag ERROR"; return; }
-    int inside = 1 - outside_flag;
 
     // Build the MAT
-    /*
-    for ( auto it = vd.vertices().begin(); it != vd.vertices().end(); ++it ) {
-        VPtr v = &(*it);
-        if ( v->color() % 2 != inside ) continue;
+    std::map<VPtr, MATvert *> mat_vertex;
+    int i(0);
+	for ( auto it = vd.vertices().begin(); it != vd.vertices().end(); ++it ) {
+		VPtr v = &(*it);
+        if ( v->color() % 2 != inside_flag ) continue;
 
-        Vec2d p(v->x(), v->y());
-        mat.verts.emplace_back(p);
+        mat.verts.emplace_back(voronoiCircumcircle(v));
         MATvert& vert = mat.verts.back();
+		mat_vertex[v] = & vert;
+		//cerr << "V at " << vert.circumcircle.center_ << " with radius " << vert.circumcircle.radius_ << endl;
+	}
+	for ( auto it = vd.vertices().begin(); it != vd.vertices().end(); ++it ) {
+		VPtr v = &(*it);
+		if ( v->color() % 2 != inside_flag ) continue;
 
-        for (int site_i = 0; site_i < 3; ++site_i)
-        {
-            CGALgraph::Face_handle nh = fh->neighbor(site_i);
-            if (to_be_removed.count(nh) > 0) {
-                vert.edge[site_i].to_ = nullptr;
-                vert.edge[site_i].twin_ = nullptr;
-            } else {
-                vert.edge[site_i].site_ = toSite(fh->vertex(CGALgraph::ccw(site_i))->site());
-                auto neighbor_it = face_to_vert.find(nh);
-                if (neighbor_it != face_to_vert.end())
-                {
-                    MATvert* neighbor_vert = neighbor_it->second;
-                    vert.edge[site_i].twin_ = &neighbor_vert->edge[nh->index(fh)];
-                    vert.edge[site_i].twin()->twin_ = &vert.edge[site_i];
-                    vert.edge[site_i].to_ = neighbor_vert;
-                    vert.edge[site_i].twin()->to_ = &vert;
-                    EdgeType type;
-                    if (vert.edge[site_i].site().is_point() != vert.edge[site_i].twin()->site().is_point()) type = EdgeType::VertEdge;
-                    else if (vert.edge[site_i].site().is_point() && vert.edge[site_i].twin()->site().is_point()) type = EdgeType::VertVert;
-                    else type = EdgeType::EdgeEdge;
-                    vert.edge[site_i].twin()->type = vert.edge[site_i].type = type;
-                } else {
-                    vert.edge[site_i].to_ = nullptr;
-                }
-            }
-        }
-        face_to_vert.emplace(fh, &vert);
+		MATvert * matv = mat_vertex[v];
+
+		EPtr first_edge = v->incident_edge();
+		EPtr edge = first_edge; // iterate over outgoing edges
+		do {
+			auto neighbor_it = mat_vertex.find(edge->vertex1());
+			if( (!edge->is_primary()) || (neighbor_it == mat_vertex.end()) ) {
+				edge = edge->rot_next();
+				continue;
+			}
+			MATvert * neighbor = neighbor_it->second;
+			// create edge
+			matv->edges_.emplace_back();
+			MATedge & mate = matv->edges_.back();
+			// setup mate.to_ pointer to neighbor
+			mate.to_ = neighbor;
+			// setup mate.type
+			CPtr cell = edge->twin()->cell(); // the cell to the right of the edge
+			CPtr opp_cell = edge->cell();
+			if( isPointSite(cell) != isPointSite(opp_cell) ) {
+				mate.type = EdgeType::VertEdge;
+			} else if( isPointSite(cell) ) {
+				mate.type = EdgeType::VertVert;
+			} else {
+				mate.type = EdgeType::EdgeEdge;
+			}
+			// setup mate.site_
+			mate.site_ = toSite(cell);
+			// setup mate.twin_
+			if( ! neighbor->edges_.empty() ) { // the neighbor has already created its edges, let's find our twin
+				bool found = false;
+				for( EdgeIterator twin_candidate = neighbor->edges_.begin();
+				  twin_candidate != neighbor->edges_.end(); ++twin_candidate ) {
+					if( twin_candidate->to_ == matv ) {
+						twin_candidate->twin_ = --matv->edges_.end();
+						mate.twin_ = twin_candidate;
+						found = true;
+					}
+				}
+				if( ! found ) {
+					cerr << "TWIN NOT FOUND !\n";
+					exit(-1);
+				}
+			}
+			edge = edge->rot_next();
+		} while( edge != first_edge );
     }
-    */
+	mat.splitApexes();
 }

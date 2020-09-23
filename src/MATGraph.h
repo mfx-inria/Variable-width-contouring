@@ -83,6 +83,9 @@ template<typename S> S & operator<<(S & s, const Site & site) {
 
 class MATvert; // forward declare
 class MATedge; // forward declare
+using EdgeList = std::list<MATedge>;
+using EdgeIterator = EdgeList::iterator;
+using ConstEdgeIterator = EdgeList::const_iterator;
 
 // Note the MATvert * |vertexSource|. It stores the MA vertex from which the target "comes from."
 struct Target {
@@ -94,7 +97,7 @@ struct Target {
 
 	union {
 		MATvert * vertexSource;
-		MATedge * edgeSource;
+		EdgeIterator edgeSource;
 	};
 
 	Target(const Disk & d) : medialAxisDisk(d), radius(0.0),
@@ -108,24 +111,20 @@ class MATedge
 public:
 	MATvert * to_;
 	Site site_;
-	MATedge* twin_;
+	EdgeIterator twin_;
 	EdgeType type;
 
-	MATedge()
-	{
-	}
+	MATedge() {}
 	Site& site() { return site_; }
 	const Site& site() const { return site_; }
 	MATvert * to() const { return to_; };
 	MATvert * from() const { return twin()->to(); };
-	MATedge* twin() const { return twin_; }
-	MATedge* next(bool walk_on_fire = false) const;
-	MATedge* nextNormalOrTwin() const;
-	MATedge* nextNormalOrNextAny() const;
-	MATedge* nextNotTrimmed() const;
-	MATedge* prev(bool walk_on_fire = false) const;
-	MATedge* cw() const;
-	MATedge* ccw() const;
+	EdgeIterator twin() const { return twin_; }
+	EdgeIterator next(bool walk_on_fire = false) const;
+	EdgeIterator nextNormalOrTwin() const;
+	EdgeIterator nextNormalOrNextAny() const;
+	EdgeIterator nextNotTrimmed() const;
+	EdgeIterator prev(bool walk_on_fire = false) const;
 	bool operator==( const MATedge & rhs ) const { return this == &rhs; }
 	bool operator!=( const MATedge & rhs ) const { return !(*this == rhs); }
 
@@ -136,10 +135,15 @@ public:
 	double getRadiusGradientAtStart() const;
 };
 
+EdgeIterator ccw(EdgeIterator e);
+EdgeIterator cw(EdgeIterator e);
+
 class MATvert
 {
 public:
-	MATedge edge[3];
+	using EdgeList = std::list<MATedge>;
+	using EdgeIterator = EdgeList::iterator;
+	EdgeList edges_;
 	Disk circumcircle;
 	// algorithm specific members
 	std::vector<Target> targets_;
@@ -158,9 +162,18 @@ public:
 	const Vec2d & pos() const { return circumcircle.center_; }
 	double radius() const { return circumcircle.radius_; }
 
-	bool has_neighbor(int i) const { return edge[i].to() != nullptr; }
-	const MATvert & neighbor(int i) const { assert((0<=i)&&(i<3)); return *edge[i].to(); }
-	MATvert & neighbor(int i) { assert((0<=i)&&(i<3)); return *edge[i].to(); }
+	template<typename F>
+		void iter_edges(const F & f) const {
+			for( ConstEdgeIterator it = edges_.begin(); it != edges_.end(); ++it ) {
+				f(it);
+			}
+		}
+	template<typename F>
+		void iter_edges(const F & f) {
+			for( EdgeIterator it = edges_.begin(); it != edges_.end(); ++it ) {
+				f(it);
+			}
+		}
 
 	bool is_destroyed() const { return status != MatStatus::Normal; }
 	bool is_normal()    const { return status == MatStatus::Normal; }
@@ -201,7 +214,7 @@ inline bool operator<(const MATvert & lhs, const MATvert & rhs) {
            ( lhs.circumcircle.center_.x() == rhs.circumcircle.center_.x() && lhs.circumcircle.center_.y() < rhs.circumcircle.center_.y() );
 }
 
-class MAOffsetInfo;
+class BoundaryCircles;
 
 class MATGraph
 {
@@ -220,7 +233,7 @@ public:
 
 	std::list<MATvert> verts;
 
-	MATvert& insert(Component * component, MATedge & edge, const Disk & circumcircle);
+	MATvert& insert(Component * component, EdgeIterator edge, const Disk & circumcircle);
 	void removeDestroyed();
 
 	/* Helper function that actually removes the MATvert's from the std::list<MATvert>
@@ -229,22 +242,20 @@ public:
 
 	bool componentHasCollapsedPart(const VertexSet &) const;
 
-	/* Return the degree of the vertex in the medial axis (represented by the MAOffsetInfo passed as
+	/* Return the degree of the vertex in the medial axis (represented by the BoundaryCircles passed as
 	 * last parameter). There are 2 inout parameters:
 		- freeway is the index of the unique neighbor alive when the degree is 1.
-		- deadend is the index of the unique dead neighbor when the degree is 2.
-		- In all other cases, freeway and/or deadend is set to -1.
+		- In all other cases, freeway to -1.
 	*/
-	int degree(const MATvert * vert, MATedge *& freeway, MATedge *& deadend, bool walk_on_fire = false) const;
+	int degree(const MATvert * vert, EdgeIterator & freeway, bool walk_on_fire = false) const;
 	int degree(const MATvert * vert, bool walk_on_fire = false) const;
-	int statusDegree(const MATvert * vert, MatStatus, MATedge *& freeway, MATedge *& deadend) const;
-	int statusDegree(const MATvert * vert, MatStatus) const;
+	int statusDegree(const MATvert * vert, const MatStatus, EdgeIterator & freeway) const;
+	int statusDegree(const MATvert * vert, const MatStatus) const;
 
 	// helpers:
 #ifndef FILL_NO_CAIRO
-	bool shaveConnectedToNormal(const MATvert * v, const MATvert * from=nullptr) const;
-	void drawMedialAxis(cairo_t * context, double lw, bool drawVertices, double maxCollapseRadius,
-			bool onlyTrimmed, bool noShave=false) const;
+	bool isShavedVertexConnectedToNormalAxis(const MATvert * v, const MATvert * from=nullptr) const;
+	void drawMedialAxis(cairo_t * context, double lw, bool drawVertices, bool onlyTrimmed, bool noShave=false) const;
 	void helper_quadratic_to(cairo_t *cr, double x1, double y1, double x2, double y2) const;
 #endif
 
@@ -254,8 +265,13 @@ public:
 
 	void linearApproxOfMedialAxis(std::vector<std::vector<Sample>> &, bool collapsedOnly = false) const;
 
+	void splitApexes();
+
 	void debugCheck() const;
+	void print() const;
 };
+
+// - - - - - - - - - - - - - - - - - - - - COLLAPSED AXIS
 
 // A mixture of MA (linearized) segments and maximal disks centerered at Normal vertices
 struct CollapsedAxis {

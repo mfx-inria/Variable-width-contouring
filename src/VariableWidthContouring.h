@@ -15,10 +15,10 @@
 
 typedef struct _cairo cairo_t;
 
-// A struct that stores everything we need to represent an offset of a polygon, on top of its medial
-// axis. The medial axis stays fixed, and each offset is described by a MAOffsetInfo.
-// A currently-working-on-MAOffsetInfo is stored in |maoi_|
-struct MAOffsetInfo {
+// A struct that stores the circles that support part of the boundary of a round shape.
+// Each arc of the medial axis can have its "right boundary" (see paper for definition),
+// supported by at most one TTR (=To The Right, i.e. convex) circle and one TTL (concave) circle.
+struct BoundaryCircles {
 	typedef std::unordered_map<const MATedge*, Disk> ArcToDisk;
 
 	// When walking around the medial axis, we think of an arc/edge as the relative interior of the
@@ -31,14 +31,14 @@ struct MAOffsetInfo {
 
 	public:
 
-	MAOffsetInfo() : lBoundary_(), rBoundary_() {}
+	BoundaryCircles() : lBoundary_(), rBoundary_() {}
 
 	void clear() {
 		lBoundary_.clear();
 		rBoundary_.clear();
 	}
 
-	void swap(MAOffsetInfo & other);
+	void swap(BoundaryCircles & other);
 
 	bool hasToTheLeftBoundary(const MATedge & e) const {
 		return lBoundary_.find(&e) != lBoundary_.end();
@@ -74,7 +74,7 @@ struct MAOffsetInfo {
 	{
 		// ASSUMES |edge| has a ToTheRight boundary circle
 		curbc = boundaryCircle(edge, ToTheRight, delta);
-		MATedge * e = edge.prev(walk_on_fire);
+		EdgeIterator e = edge.prev(walk_on_fire);
 		while( ! hasBoundary(*e) ) e = e->prev(walk_on_fire);
 		pbc = boundaryCircle(*e, ToTheLeft, delta);
 		if( ! hasToTheLeftBoundary(edge) ) {
@@ -103,29 +103,24 @@ public:
 
 public:
 
-	using NewCycleFunction = const std::function<void (const MATedge *, const MATvert *, const MATedge *)>;
-	using WalkFunction = const std::function<const MATedge * (const MATedge *, const MATvert *, const MATedge *)>;
+	using NewCycleFunction = const std::function<void (ConstEdgeIterator, const MATvert *, ConstEdgeIterator)>;
+	using WalkFunction     = const std::function<void (ConstEdgeIterator, const MATvert *, ConstEdgeIterator)>;
 	using SampleFunction = std::function<Sample (const Sample &)>;
 	
-	VariableWidthContouring(MATGraph& graph, double minToolRadius, double maxToolRadius)
+	VariableWidthContouring(MATGraph& graph, double minToolRadius, double maxToolRadius, double
+			simplifyThreshold)
 	: graph(graph)
 	, maoi_(nullptr)
 	, minToolRadius_(minToolRadius)
 	, maxToolRadius_(maxToolRadius)
 	, currentComponent_(nullptr)
-	, simplifyThreshold_(1.0)
+	, simplifyThreshold_(simplifyThreshold)
 	, maxCollapseRadius_(2 * maxToolRadius)
 	{
 	}
 	
 	double minCollapseRadius() { return minToolRadius_ * 4; }
-	double maxCollapseRadius() { return maxCollapseRadius_; }
-	void setMaxCollapseFactor(const double factor) {
-		if( factor < 1 )
-			maxCollapseRadius_ = 2 * maxToolRadius_;
-		else
-			maxCollapseRadius_ = std::min(factor * minCollapseRadius(), 2 * maxToolRadius_);
-	}
+	double maxCollapseRadius() { return maxToolRadius_ * 2; }
 
 	// Returns the distance from point |p| (assumed to lie on the |arc|) to the polygon features that
 	// define the arc.
@@ -140,11 +135,11 @@ public:
 	// Does the circumcenter of the face |f| happen to be a vertex of the input polygon?
 	bool isInputVertex(MATvert * f) const;
 
-	void gatherCollapsedSegment(const MATedge * startCollapsedEdge, const MATedge * & endNormalEdge,
+	void gatherCollapsedSegment(EdgeIterator startCollapsedEdge, EdgeIterator & endNormalEdge,
 			CollapsedAxis & axis) const;
 
 	BBox computeBBox() const;
-	void computeSmoothPaths(const Component &, SmoothPaths & out, bool walk_on_fire = false, MAOffsetInfo * maoi = nullptr) const;
+	void computeSmoothPaths(const Component &, SmoothPaths & out, bool walk_on_fire = false, BoundaryCircles * maoi = nullptr) const;
 	void computeMedialAxis(const Paths & slice);
 	SampleFunction makeProjectorOnMA(const MATedge & arc) const;
 
@@ -174,8 +169,8 @@ public:
 	/*!
 	 * \return The largest clearedDistance
 	 */
-	void clip(MATedge * start, const Target &, vector<MATvert *> &);
-	void shaveLeafs(std::list<MATedge *> & propagations);
+	void clip(EdgeIterator start, const Target &, vector<MATvert *> &);
+	void shaveLeafs(std::list<EdgeIterator> & propagations);
 	double trimLeafs(bool trimVertices);
 	void reduceRadii();
 
@@ -195,21 +190,20 @@ public:
 	  */
 	void removeAllBranches();
 
-	/* Return the degree of the vertex in the medial axis (represented by the MAOffsetInfo passed as
+	/* Return the degree of the vertex in the medial axis (represented by the BoundaryCircles passed as
 	 * last parameter). There are 2 inout parameters:
 	 	- freeway is the index of the unique neighbor alive when the degree is 1.
 		- deadend is the index of the unique dead neighbor when the degree is 2.
 		- In all other cases, freeway and/or deadend is set to -1.
 	*/
-	int statusDegree(const MATvert * vert, MatStatus, MATedge *& freeway, MATedge *& deadend) const;
-	int degree(const MATvert * vert, MATedge *& freeway, MATedge *& deadend, bool walk_on_fire = false) const;
+	int statusDegree(const MATvert * vert, MatStatus, EdgeIterator & freeway) const;
+	int degree(const MATvert * vert, EdgeIterator & freeway, bool walk_on_fire = false) const;
 	int degree(const MATvert * vert, bool walk_on_fire = false) const;
 	void analyse(double & minRadius, double & minInside, double & maxRadius) const;
-	void setWorkingMAOffsetInfo(MAOffsetInfo *);
-	void samplePrintPath(Component &, MAOffsetInfo * prevInfo, std::vector<std::vector<Sample>> & pts);
+	void setWorkingBoundaryCircles(BoundaryCircles *);
+	void samplePrintPath(Component &, BoundaryCircles * prevInfo, std::vector<std::vector<Sample>> & pts);
 
 	void setCurrentComponent(Component & c) { currentComponent_ = & c; }
-	void setSimplifyThreshold(double st) { simplifyThreshold_ = st; }
 
 	void clear() {
 		maoi_->clear();
@@ -217,7 +211,7 @@ public:
 
 protected:
 	double maxToolRadius_, minToolRadius_, simplifyThreshold_;
-	MAOffsetInfo * maoi_;
+	BoundaryCircles * maoi_;
 	Component * currentComponent_;
 	double maxCollapseRadius_;
 };

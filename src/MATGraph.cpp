@@ -5,6 +5,9 @@
 #include <iterator> // for std::distance
 #include <algorithm> // rotate
 #include <stack>
+#include <map>
+
+// - - - - - - - - - - - - - - - - - - - - - COLLAPSEDAXIS
 
 void
 CollapsedAxis::
@@ -107,7 +110,7 @@ computeBoundaryCircles(SmoothPath & sp, Samples::const_iterator it, Samples::con
 					}
 				} else {
 					const SubAxis & curAxis = subAxes[prevAP.axis()];
-					cerr << "Changing axis! from " << prevAP << " to " << ap << " (at"
+					cerr << "[Variable-width contouring] Changing axis! from " << prevAP << " to " << ap << " (at "
 						<< curAxis.clippingVertex->pos() <<  " --> "
 						<< axis.clippingVertex->pos() <<  ")" << endl;
 				}
@@ -198,6 +201,41 @@ clear() {
 	curAP.set(0,-1);
 }
 
+// - - - - - - - - - - - - - - - - - - - - - MATGRAPH
+
+void
+MATGraph::
+print() const {
+	std::map<const MATvert *, std::string> vName;
+	std::vector<const MATvert *> sorted;
+	for( const MATvert & v : verts ) {
+		sorted.push_back(&v);
+	}
+	std::sort(sorted.begin(), sorted.end(), [](const MATvert * l, const MATvert * r) {
+			return l->circumcircle.center_ < r->circumcircle.center_;
+			});
+	int i(0);
+	for( const MATvert * v : sorted ) {
+		int j = i++;
+		vName[v] = std::string("");
+		do {
+			vName[v] = (char)('A' + (j%26)) + vName[v];
+			j /= 26;
+		} while( j > 0 );
+	}
+	for( const MATvert * v : sorted ) {
+		cerr << vName[v] << " : " << v->circumcircle.center_ << ", " << v->status << endl;
+		v->iter_edges([&](ConstEdgeIterator e) {
+			const MATvert * n = e->to();
+			if( e->type == EdgeType::VertEdge )
+				cerr << "\t~~> ";
+			else
+				cerr << "\t--> ";
+			cerr	<< vName[n] << '(' << n->circumcircle.center_ << ')' << endl;
+		});
+	}
+}
+
 void
 MATGraph::
 computeConnectedComponents(Components & components) {
@@ -205,7 +243,7 @@ computeConnectedComponents(Components & components) {
 	VertexSet visited;
 	for ( MATvert & vert_ : verts ) {
 		MATvert * vert = & vert_;
-		if ( visited.count(vert) > 0 ) continue;
+		if( visited.count(vert) > 0 ) continue;
 		components.emplace_back();
 		VertexSet & component = components.back().vertexSet;
 		std::vector< MATvert *> to_check;
@@ -213,13 +251,13 @@ computeConnectedComponents(Components & components) {
 		component.emplace(vert);
 		while ( ! to_check.empty() ) {
 			MATvert * v = to_check.back(); to_check.pop_back();
-			for ( int i = 0 ; i < 3 ; ++i ) {
-				MATvert * neighbor = v->edge[i].to();
-				if (v->has_neighbor(i) && component.count(neighbor) == 0) {
+			v->iter_edges([&](EdgeIterator edge) {
+				MATvert * neighbor = edge->to();
+				if( component.count(neighbor) == 0 ) {
 					component.emplace(neighbor);
 					to_check.emplace_back(neighbor);
 				}
-			}
+			});
 		}
 		visited.insert(component.begin(), component.end());
 	}
@@ -227,59 +265,57 @@ computeConnectedComponents(Components & components) {
 
 int
 MATGraph::
-statusDegree(const MATvert * vert, MatStatus status) const {
-	MATedge * deadend, * freeway;
-	return statusDegree(vert, status, freeway, deadend);
+statusDegree(const MATvert * vert, const MatStatus status) const {
+	/* Returns the number of neighbors with given status.
+	 */
+	EdgeIterator freeway;
+	return statusDegree(vert, status, freeway);
 }
 
 int
 MATGraph::
-statusDegree(const MATvert * vert, MatStatus status, MATedge *& freeway, MATedge *& deadend) const {
+statusDegree(const MATvert *vert, const MatStatus status, EdgeIterator & freeway) const {
+	/* Returns the number of neighbors with given status.
+	   If it is 1, then freeway is the edge leading to the neighbor with that status.
+	 */
 	int deg = 0;
-	deadend = nullptr, freeway = nullptr;
-	for( int i(0); i < 3; ++i ) {
-		if( vert->has_neighbor(i) && (vert->edge[i].to()->status == status) ) {
-			freeway = const_cast<MATedge *>(&vert->edge[i]);
+	MATvert *non_const_v = const_cast<MATvert *>(vert);
+	freeway = non_const_v->edges_.end();
+	non_const_v->iter_edges([&](EdgeIterator edge) {
+		if( edge->to()->status == status ) {
+			freeway = edge;
 			++deg;
-		} else {
-			deadend = const_cast<MATedge *>(&vert->edge[i]);
 		}
-	}
-	switch( deg ) {
-		case 1 : deadend = nullptr; break;
-		case 2 : freeway = nullptr; break;
-		default: deadend = freeway = nullptr;
-	}
-	assert(deg >= 0 && deg < 4);
+	});
+	if( deg != 1 ) freeway = non_const_v->edges_.end();
 	return deg;
 }
 
 int
 MATGraph::
 degree(const MATvert * vert, bool walk_on_fire) const {
-	MATedge * freeway, * deadend;
-	return degree(vert, freeway, deadend, walk_on_fire);
+	/* Returns the number of MatStatus::Normal neighbors (or any status if |walk_on_fire| is true).
+	 */
+	EdgeIterator freeway;
+	return degree(vert, freeway, walk_on_fire);
 }
 
 int
 MATGraph::
-degree(const MATvert * vert, MATedge *& freeway, MATedge *& deadend, bool walk_on_fire) const {
+degree(const MATvert * vert, EdgeIterator & freeway, bool walk_on_fire) const {
+	/* Returns the number of MatStatus::Normal neighbors (or any status if |walk_on_fire| is true).
+	   If it is 1, then freeway is the edge leading to the neighbor with that status.
+	 */
 	int deg = 0;
-	deadend = nullptr, freeway = nullptr;
-	for( int i(0); i < 3; ++i ) {
-		if( vert->has_neighbor(i) && (walk_on_fire || (vert->edge[i].to()->status == MatStatus::Normal)) ) {
-			freeway = const_cast<MATedge *>(&vert->edge[i]);
+	MATvert *non_const_v = const_cast<MATvert *>(vert);
+	freeway = non_const_v->edges_.end();
+	non_const_v->iter_edges([&](EdgeIterator edge) {
+		if( walk_on_fire || (edge->to()->status == MatStatus::Normal) ) {
+			freeway = edge;
 			++deg;
-		} else {
-			deadend = const_cast<MATedge *>(&vert->edge[i]);
 		}
-	}
-	switch( deg ) {
-		case 1 : deadend = nullptr; break;
-		case 2 : freeway = nullptr; break;
-		default: deadend = freeway = nullptr;
-	}
-	assert(deg >= 0 && deg < 4);
+	});
+	if( deg != 1 ) freeway = non_const_v->edges_.end();
 	return deg;
 }
 
@@ -295,11 +331,11 @@ componentHasCollapsedPart(const VertexSet & vs) const {
 		while( ! jobs.empty() ) {
 			const MATvert * v = jobs.top(); jobs.pop();
 			visited.insert(v);
-			for( int i = 0; i < 3; ++i ) {
-				if( ! v->edge[i].to() ) continue;
-				if( v->edge[i].to()->is_collapsed() ) return true;
-				if( visited.count(v->edge[i].to()) > 0 ) continue;
-				jobs.push(v->edge[i].to());
+			for( ConstEdgeIterator edge = v->edges_.begin(); edge != v->edges_.end(); ++edge ) {
+				MATvert * neighbor = edge->to();
+				if( neighbor->is_collapsed() ) return true;
+				if( visited.count(neighbor) > 0 ) continue;
+				jobs.push(neighbor);
 			}
 		}
 	}
@@ -308,32 +344,34 @@ componentHasCollapsedPart(const VertexSet & vs) const {
 
 MATvert&
 MATGraph::
-insert(Component * component, MATedge & edge, const Disk & circumcircle)
+insert(Component * component, EdgeIterator edge, const Disk & circumcircle)
 {
 	debugCheck();
-	MATedge * original_edge = & edge;
-	MATedge * original_twin = original_edge->twin();
+	EdgeIterator original_twin = edge->twin();
 	verts.emplace_back(circumcircle);
 	MATvert & vert = verts.back();
 	if( nullptr != component ) {
 		component->vertexSet.insert(&vert);
 	}
-	vert.edge[0].twin_ = original_edge;
-	vert.edge[0].to_ = original_twin->to_;
-	vert.edge[0].site_ = original_twin->site_;
-	vert.edge[0].type = original_edge->type;
+	vert.edges_.emplace_front();
+	EdgeIterator e0 = vert.edges_.begin();
+	vert.edges_.emplace_front();
+	EdgeIterator e1 = vert.edges_.begin();
+	//cerr << "e0, e1, begin " << &(*e0) << ' ' << &(*e1) << ' ' << &(*vert.edges_.begin()) << endl;
+	e0->twin_ = edge;
+	e0->to_ = original_twin->to_;
+	e0->site_ = original_twin->site_;
+	e0->type = original_twin->type;
 
-	vert.edge[1].twin_ = original_twin;
-	vert.edge[1].to_ = original_edge->to_;
-	vert.edge[1].site_ = original_edge->site_;
-	vert.edge[1].type = original_twin->type;
+	e1->twin_ = original_twin;
+	e1->to_ = edge->to_;
+	e1->site_ = edge->site_;
+	e1->type = edge->type;
+	assert(edge->type == original_twin->type);
 
-	vert.edge[2].to_ = nullptr;
-	vert.edge[2].twin_ = nullptr;
-
-	original_edge->twin_ = & vert.edge[0];
-	original_edge->to_ = &vert;
-	original_twin->twin_ = & vert.edge[1];
+	edge->twin_ = e0;
+	edge->to_ = &vert;
+	original_twin->twin_ = e1;
 	original_twin->to_ = &vert;
 
 	debugCheck();
@@ -343,15 +381,13 @@ insert(Component * component, MATedge & edge, const Disk & circumcircle)
 void
 MATGraph::
 removeVertexSet(const std::unordered_set<MATvert *> to_remove) {
-	for ( auto vert_it = verts.begin(); vert_it != verts.end(); ) {
+	for( auto vert_it = verts.begin(); vert_it != verts.end(); ) {
 		MATvert * vert = &(*vert_it);
 		if( to_remove.count(vert) > 0 ) {
-			for (int i = 0; i < 3; ++i ) {
-				if ( vert->edge[i].twin() ) {
-					vert->edge[i].twin()->to_ = nullptr;
-					vert->edge[i].twin()->twin_ = nullptr;
-				}
-			}
+			vert->iter_edges([](EdgeIterator edge) {
+					// kill the twin
+					edge->to()->edges_.erase(edge->twin());
+			});
 			vert_it = verts.erase(vert_it);
 		} else {
 			++vert_it;
@@ -364,14 +400,10 @@ void
 MATGraph::
 removeDestroyed() {
 	for ( auto vert_it = verts.begin(); vert_it != verts.end(); ) {
-		MATvert & vert = *vert_it;
-		if (vert.status != MatStatus::Normal) {
-			for (int i = 0; i < 3; ++i ) {
-				if ( vert.edge[i].twin() ) {
-					vert.edge[i].twin()->to_ = nullptr;
-					vert.edge[i].twin()->twin_ = nullptr;
-				}
-			}
+		if (vert_it->status != MatStatus::Normal) {
+			vert_it->iter_edges([](EdgeIterator edge) {
+					edge->to()->edges_.erase(edge->twin());
+			});
 			vert_it = verts.erase(vert_it);
 		} else {
 			++vert_it;
@@ -380,98 +412,79 @@ removeDestroyed() {
 	debugCheck();
 }
 
-MATedge*
-MATedge::
-cw() const
+// - - - - - - - - - - - - - - - - - - - - - MATEDGE
+
+EdgeIterator
+cw(EdgeIterator e)
 {
-	assert(twin() && twin()->to());
-	MATvert * from_ = from();
-	int idx = this - static_cast<MATedge*>(from_->edge);
-	for ( int i = 0; i < 2; ++i ) {
-		idx--;
-		if (idx == -1) idx = 2;
-		if ( from_->edge[idx].to() ) return &from_->edge[idx];
-	}
-	return const_cast<MATedge*>(this);
+	MATvert * v = e->from();
+	if( e == v->edges_.begin() )
+		return --(v->edges_.end());
+	return --e;
 }
 
-MATedge*
-MATedge::
-ccw() const
+EdgeIterator
+ccw(EdgeIterator e)
 {
-	assert(twin() && twin()->to());
-	MATvert * from_ = from();
-	int idx = this - static_cast<MATedge*>(from_->edge);
-	for ( int i = 0; i < 2; ++i ) {
-		idx++;
-		if (idx == 3) idx = 0;
-		if ( from_->edge[idx].to() ) return &from_->edge[idx];
-	}
-	return const_cast<MATedge*>(this);
+	MATvert * v = e->from();
+	e++;
+	if( e == v->edges_.end() )
+		return v->edges_.begin();
+	return e;
 }
 
-MATedge*
+EdgeIterator
 MATedge::
 nextNotTrimmed() const {
-	assert(to() && twin());
-	MATedge* edge = twin()->ccw();
-	for ( int i = 0; i < 2; ++i ) {
-		if ( edge->to() && (!edge->to()->is_trimmed()) ) return edge;
-		edge = edge->ccw();
-	}
-	return twin();
+	EdgeIterator edge = ccw(twin());
+	while( edge->to()->is_trimmed() && (edge != twin()) )
+		edge = ccw(edge);
+	return edge;
 }
 
-MATedge*
+EdgeIterator
 MATedge::
 nextNormalOrTwin() const {
-	assert(to() && twin());
-	MATedge* edge = twin()->ccw();
-	for ( int i = 0; i < 2; ++i ) {
-		if ( edge->to() && (!edge->to()->is_destroyed()) ) return edge;
-		edge = edge->ccw();
-	}
-	// or twin:
-	return twin();
+	EdgeIterator edge = ccw(twin());
+	while( edge->to()->is_destroyed() && (edge != twin()) )
+		edge = ccw(edge);
+	return edge;
 }
 
-MATedge*
+EdgeIterator
 MATedge::
 nextNormalOrNextAny() const {
-	assert(to() && twin());
-	MATedge* edge = twin()->ccw();
-	for ( int i = 0; i < 3; ++i ) {
-		if ( edge->to() && (!edge->to()->is_destroyed()) ) return edge;
-		edge = edge->ccw();
-	}
-	// or next any:
-	return twin()->ccw();
+	EdgeIterator edge, e0;
+	e0 = edge = ccw(twin());
+	do {
+		if( ! e0->to()->is_destroyed() ) return e0;
+		e0 = ccw(e0);
+	} while( e0 != edge );
+	return edge;
 }
 
-MATedge*
+EdgeIterator
 MATedge::
 next(bool walk_on_fire) const {
-	assert(to() && twin());
-	assert(walk_on_fire || (!from()->is_destroyed() && !to()->is_destroyed()));
-	MATedge* edge = twin()->ccw();
-	for ( int i = 0; i < 2; ++i ) {
-		if ( edge->to() && (walk_on_fire || !edge->to()->is_destroyed()) ) return edge;
-		edge = edge->ccw();
-	}
-	return twin();
+	assert(walk_on_fire || (from()->is_normal() && to()->is_normal()));
+	EdgeIterator edge = ccw(twin());
+	if( walk_on_fire ) return edge;
+	while( edge->to()->is_destroyed() && (edge != twin()) )
+		edge = ccw(edge);
+	return edge;
 }
 
-MATedge*
+EdgeIterator
 MATedge::
 prev(bool walk_on_fire) const {
-	assert(twin());
-	assert(walk_on_fire || (!from()->is_destroyed() && !to()->is_destroyed()));
-	MATedge* edge = cw();
-	for ( int i = 0; i < 2; ++i ) {
-		if ( edge->to() && (walk_on_fire || !edge->to()->is_destroyed()) ) return edge->twin();
-		edge = edge->cw();
-	}
-	return twin();
+	assert(walk_on_fire || (from()->is_normal() && to()->is_normal()));
+	EdgeIterator self = twin()->twin();
+	assert(this == &(*self));
+	EdgeIterator edge = cw(self);
+	if( walk_on_fire ) return edge->twin();
+	while( edge->to()->is_destroyed() && (edge != self) )
+		edge = cw(edge);
+	return edge->twin();
 }
 
 Vec2d
@@ -479,7 +492,7 @@ MATedge::
 getGeneratorLocation() const {
 	if (site().is_point()) return site().point();
 	assert(site().is_segment());
-	assert(twin() && twin()->to());
+	assert(twin()->to());
 	Vec2d p = from()->circumcircle.center_;
 	Vec2d a = site().source();
 	Vec2d b = site().destination();
@@ -507,6 +520,7 @@ getRadiusGradientAtStart() const {
 }
 
 #ifndef FILL_NO_CAIRO
+
 // A Cairo helper function that draw a quadratic bezier curve with a cubic one.
 void
 MATGraph::
@@ -524,19 +538,18 @@ helper_quadratic_to(cairo_t *cr,
 	                x2, y2);
 }
 
-// draw medial axis to a cairo context
+// used to decide which color to draw some arcs
 bool
 MATGraph::
-shaveConnectedToNormal(const MATvert * v, const MATvert * from) const {
+isShavedVertexConnectedToNormalAxis(const MATvert * v, const MATvert * from) const {
 	bool r = false;
-	for( int i = 0; i < 3; ++i ) {
-		const MATedge & edge = v->edge[i];
-		if (!edge.to()) continue;
-		const MATvert * neighbor = edge.to();
+	for( ConstEdgeIterator edge = v->edges_.begin(); edge != v->edges_.end(); ++edge ) {
+		const MATvert * neighbor = edge->to();
 		if( neighbor->is_normal() ) return true;
 		if( ! neighbor->is_shaved() ) continue;
 		if( neighbor == from ) continue;
-		r = r || shaveConnectedToNormal(neighbor, v);
+		r = r || isShavedVertexConnectedToNormalAxis(neighbor, v);
+		if( r ) break;
 	}
 	return r;
 }
@@ -550,17 +563,15 @@ static Vec4d gShavedColor(1.0, 1.0, 0.2, 1.0);
 void
 MATGraph::
 drawMedialAxis(cairo_t * context, double lw, bool drawVertices,
-		double maxCollapseRadius, bool onlyTrimmed, bool noShave) const {
+		bool onlyTrimmed, bool noShave) const {
 	cairo_set_line_width(context, lw);
 	cairo_set_line_cap(context, CAIRO_LINE_CAP_BUTT);
 	cairo_set_source_rgba(context,1,1,1,1);
 	for( const MATvert & vert : verts ) {
 		int nbArcs(0);
-		for( int i = 0; i < 3; ++i ) {
-			const MATedge & edge = vert.edge[i];
-			if (!edge.to()) continue;
+		for( ConstEdgeIterator edge = vert.edges_.begin(); edge != vert.edges_.end(); ++edge ) {
 			++nbArcs;
-			const MATvert& neighbor = *edge.to();
+			const MATvert & neighbor = *edge->to();
 			if( neighbor < vert ) continue;
 			// OK, draw the arc
 			Vec2d a = vert.circumcircle.center_;
@@ -573,7 +584,7 @@ drawMedialAxis(cairo_t * context, double lw, bool drawVertices,
 					rgba = gShavedColor;
 					const MATvert * shavedVert = edge.to();
 					if( edge.from()->is_shaved() ) shavedVert = edge.from();
-					if( shaveConnectedToNormal(shavedVert) )
+					if( isShavedVertexConnectedToNormalAxis(shavedVert) )
 						rgba = gCollapsedColor;
 				}
 				if( edge.to()->is_trimmed() || edge.from()->is_trimmed()) {
@@ -586,16 +597,16 @@ drawMedialAxis(cairo_t * context, double lw, bool drawVertices,
 				cairo_set_source_rgba(context, rgba[0], rgba[1], rgba[2], rgba[3]);
 			};
 			rgba = gNormalColor;
-			if( edge.type != EdgeType::VertEdge ) {
-				colorEdge(edge);
+			if( edge->type != EdgeType::VertEdge ) {
+				colorEdge(*edge);
 				if( onlyTrimmed != trimmedEdge ) continue;
 				cairo_move_to(context, a.x(), a.y());
 				cairo_line_to(context, b.x(), b.y());
 			} else {
-				colorEdge(edge);
+				colorEdge(*edge);
 				if( onlyTrimmed != trimmedEdge ) continue;
 				QuadraticArc qArc;
-				buildBezierQuadraticOfArc(edge, qArc);
+				buildBezierQuadraticOfArc(*edge, qArc);
 				cairo_move_to(context, a.x(), a.y());
 				helper_quadratic_to(context, qArc.b.x(), qArc.b.y(), b.x(), b.y());
 			}
@@ -650,7 +661,7 @@ drawMedialAxis(cairo_t * context, double lw, bool drawVertices,
 		}
 	}
 }
-#endif
+#endif // FILL_NO_CAIRO
 
 void
 MATGraph::
@@ -752,18 +763,17 @@ linearApproxOfMedialAxis(std::vector<std::vector<Sample>> & out, bool collapsedO
 	if( collapsedOnly ) {
 		for( const MATvert & vert : verts ) {
 			if( vert.status != MatStatus::Collapsed ) {
-				for( int i = 0; i < 3; ++i ) {
-					visited.insert(& vert.edge[i]);
-					visited.insert(vert.edge[i].twin());
-				}
+				vert.iter_edges([&](ConstEdgeIterator edge) {
+					visited.insert(&(*edge));
+					visited.insert(&(*edge->twin()));
+				});
 			}
 		}
 	}
 	for( const MATvert & vert_ : verts ) {
 		const MATvert * vert = &vert_;
-		MATedge * freeway, * deadend;
 		if( collapsedOnly && ( ! vert->is_collapsed() ) ) continue;
-		if( (collapsedOnly && statusDegree(vert, MatStatus::Collapsed, freeway, deadend) == 0)
+		if( (collapsedOnly && statusDegree(vert, MatStatus::Collapsed) == 0)
 				||
 			   (!collapsedOnly && degree(vert, true) == 0) ) {
 			out.emplace_back();
@@ -772,17 +782,15 @@ linearApproxOfMedialAxis(std::vector<std::vector<Sample>> & out, bool collapsedO
 			out.back().push_back(s);
 			out.back().push_back(s);
 		}
-		for( int i = 0; i < 3; ++i ) {
-			if ( ! vert->has_neighbor(i) ) continue;
-			if ( visited.count(& vert->edge[i]) > 0 ) continue;
-			const MATedge * arc = & vert->edge[i];
+		for( ConstEdgeIterator arc = vert->edges_.begin(); arc !=  vert->edges_.end(); ++arc ) {
+			if ( visited.count(&(*arc)) > 0 ) continue;
 			out.emplace_back();
 			s.pos = arc->from()->circumcircle.center_;
 			s.radius = arc->from()->circumcircle.radius_;
 			out.back().push_back(s);
 			while( true ) {
-				visited.insert(arc);
-				visited.insert(arc->twin());
+				visited.insert(&(*arc));
+				visited.insert(&(*arc->twin()));
 				const MATvert * vert = arc->from();
 				const MATvert * neighbor = arc->to();
 				// OK, approx the arc
@@ -803,14 +811,54 @@ linearApproxOfMedialAxis(std::vector<std::vector<Sample>> & out, bool collapsedO
 					diceQuadratic(focus, qArc, out.back());
 				}
 				bool at_least_one = false;
-				for( int i = 0; i < 3; ++i ) {
-					if ( ! neighbor->has_neighbor(i) ) continue;
-					if ( visited.count(& neighbor->edge[i]) > 0 ) continue;
+				for( ConstEdgeIterator ne = neighbor->edges_.begin(); ne != neighbor->edges_.end(); ++ne ) {
+					if ( visited.count(&(*ne)) > 0 ) continue;
 					at_least_one = true;
-					arc = & neighbor->edge[i];
+					arc = ne;
 					break;
 				}
 				if( ! at_least_one ) break;
+			}
+		}
+	}
+}
+
+void
+MATGraph::
+splitApexes()
+{
+	for ( MATvert & vert : verts ) {
+		for( EdgeIterator edge_it = vert.edges_.begin(); edge_it != vert.edges_.end(); ++edge_it ) {
+			MATedge & edge = *edge_it;
+			if ( edge.to() < edge.from() ) continue; // arbitrary ordering to avoid unneeded apex twin ;)
+			if ( edge.type == EdgeType::EdgeEdge ) continue; // there is no apex
+
+			Vec2d a, b, base, x_dir;
+			if ( edge.type == EdgeType::VertVert ) {
+				a = edge.site().point();
+				b = edge.twin()->site().point();
+				base = b;
+				x_dir = (b - a).rotatedCCW();
+			} else {
+				assert(edge.type == EdgeType::VertEdge);
+				Site& point_site = edge.site().is_point() ? edge.site() : edge.twin()->site();
+				Site& segment_site = edge.site().is_point() ? edge.twin()->site() : edge.site();
+				a = point_site.point();
+				Vec2d sa = segment_site.source();
+				Vec2d sb = segment_site.destination();
+				x_dir = sb - sa;
+				b = Utils::project(a, sa, sb);
+				base = sa;
+			}
+			Utils::reduceVec(x_dir); // reduce magnitude without losing precision (by divisions by powers of 2)
+			double goes_left = x_dir.dot(vert.circumcircle.center_ - a);
+			double goes_right = x_dir.dot(edge.to()->circumcircle.center_ - a);
+			if( goes_left * goes_right < 0.0 ) { // otherwise apex is beyond the segment
+				Vec2d y_dir = x_dir.rotatedCCW();
+				y_dir.normalize();
+				Vec2d mid = 0.5 * (a + b);
+				double radius = y_dir.dot(a-base) * 0.5;
+				insert(nullptr, edge_it, Disk(mid, std::fabs(radius)));
 			}
 		}
 	}
@@ -822,12 +870,14 @@ debugCheck() const
 {
 #ifndef NDEBUG
 	for ( const MATvert & vert : verts ) {
-		for (int i = 0; i < 3 ; ++i ) {
-			assert(!vert.edge[i].to() || vert.edge[i].twin() != nullptr);
-			assert(!vert.edge[i].to() || vert.edge[i].twin()->twin() == & vert.edge[i]);
-			assert(!vert.edge[i].to() || vert.edge[i].from() == & vert);
-			assert(!vert.edge[i].to() || vert.edge[i].next(true)->prev(true) == & vert.edge[i]);
-			assert(!vert.edge[i].to() || vert.edge[i].from()->is_destroyed() || vert.edge[i].to()->is_destroyed() || vert.edge[i].next(false)->prev(false) == & vert.edge[i]);
+		MATvert * v = const_cast<MATvert *>(&vert);
+		for( EdgeIterator e = v->edges_.begin(); e != v->edges_.end(); ++e ) {
+			assert(e->to());
+			assert(e->twin() != e->to()->edges_.end());
+			assert(e->twin()->twin() == e);
+			assert(e->from() == v);
+			assert(e->next(true)->prev(true) == e);
+			assert(e->from()->is_destroyed() || e->to()->is_destroyed() || e->next(false)->prev(false) == e);
 		}
 	}
 #endif

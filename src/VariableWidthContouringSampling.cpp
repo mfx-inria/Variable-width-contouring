@@ -5,16 +5,17 @@
 using namespace std;
 
 Sample
-getFirstSample(MAOffsetInfo * maoi, const MATedge & edge, const double minToolRadius) {
-	const MATedge * e = & edge;
+getFirstSample(BoundaryCircles * maoi, const ConstEdgeIterator edge, const double minToolRadius) {
+
+	ConstEdgeIterator e = edge;
 
 	BitangentComputer bmake(minToolRadius);
 
-	if( maoi->hasToTheRightBoundary(edge) && ( ! edge.from()->fullyCleared_) ) {
+	if( maoi->hasToTheRightBoundary(*edge) && ( ! edge->from()->fullyCleared_) ) {
 		// The samples of a fully cleared circle all project to the same point (the center
 		// of the circle) on the bisector, so we don't have to sample it.
 		BoundaryCircle oc0, oc1, oc2;
-		maoi->findBoundaryCirclesAdjacentToTTR(edge, oc0, oc1, oc2, 0, true);
+		maoi->findBoundaryCirclesAdjacentToTTR(*edge, oc0, oc1, oc2, 0, true);
 		Vec2d a,c,tgt;
 		bmake(oc0, oc1, c, a);
 		tgt = (a - oc1.center()).normalized();
@@ -24,13 +25,13 @@ getFirstSample(MAOffsetInfo * maoi, const MATedge & edge, const double minToolRa
 
 	while( ! maoi->hasBoundary(*e) ) e = e->prev(true);
 	const BoundaryCircle bot = maoi->boundaryCircle(*e, ToTheLeft, 0);
-	e = edge.next(true);
+	e = edge->next(true);
 	while( ! maoi->hasBoundary(*e) ) e = e->next(true);
 	const BoundaryCircle top = maoi->boundaryCircle(*e, ToTheRight, 0);
 
-	Vec2d from(edge.from()->circumcircle.center_);
+	Vec2d from(edge->from()->circumcircle.center_);
 
-	if( edge.site().is_point() ) { // We are sampling a ToTheLeft circular arc
+	if( edge->site().is_point() ) { // We are sampling a ToTheLeft circular arc
 		Vec2d dir = (from - bot.center()).normalized();
 		Vec2d pos = bot.center() + (bot.radius() * dir);
 		dir.rotateCW();
@@ -54,9 +55,9 @@ getFirstSample(MAOffsetInfo * maoi, const MATedge & edge, const double minToolRa
 
 template< typename F >
 void
-sampleEdge(MAOffsetInfo * maoi,
+sampleEdge(BoundaryCircles * maoi,
 		const bool walk_on_fire,
-		const MATedge & edge,
+		const ConstEdgeIterator edge,
 		const F & out,
 		SampleFunction & project,
 		bool noProject,
@@ -69,11 +70,11 @@ sampleEdge(MAOffsetInfo * maoi,
 	//bool debug = vert->pos().x() > 5.5 && vert->pos().x() < 6.0
 	//				&& vert->pos().y() < -10.6 && vert->pos().y() > -11.0;
 
-	if( maoi->hasToTheRightBoundary(edge) && ( ! edge.from()->fullyCleared_) ) {
+	if( maoi->hasToTheRightBoundary(*edge) && ( ! edge->from()->fullyCleared_) ) {
 		// The samples of a fully cleared circle all project to the same point (the center
 		// of the circle) on the bisector, so we don't have to sample it.
 		BoundaryCircle oc0, oc1, oc2;
-		maoi->findBoundaryCirclesAdjacentToTTR(edge, oc0, oc1, oc2, radiusOffset, true);
+		maoi->findBoundaryCirclesAdjacentToTTR(*edge, oc0, oc1, oc2, radiusOffset, true);
 		Vec2d a,b,c;
 		bmake(oc0, oc1, c, a);
 		bmake(oc1, oc2, b, c);
@@ -82,22 +83,22 @@ sampleEdge(MAOffsetInfo * maoi,
 		Sampling::sampleCircularArc(a, b, oc1, out, /*clockwise*/false, project, radiusOffset);
 	}
 
-	const MATedge * e = & edge;
+	ConstEdgeIterator e = edge;
 	while( ! maoi->hasBoundary(*e) ) e = e->prev(walk_on_fire);
 	const BoundaryCircle bot = maoi->boundaryCircle(*e, ToTheLeft, radiusOffset);
-	e = edge.next(walk_on_fire);
+	e = edge->next(walk_on_fire);
 	while( ! maoi->hasBoundary(*e) ) e = e->next(walk_on_fire);
 	const BoundaryCircle top = maoi->boundaryCircle(*e, ToTheRight, radiusOffset);
 
 	// |top| and |bot| are vertices on the outer boundary of the ribbon
 
-	const Vec2d from(edge.from()->circumcircle.center_);
-	e = edge.next(walk_on_fire);
+	const Vec2d from(edge->from()->circumcircle.center_);
+	e = edge->next(walk_on_fire);
 	const Vec2d to(e->from()->circumcircle.center_);
 
 	// |from| and |to| are vertices of the medial axis
 
-	if( edge.site().is_point() ) { // We are sampling a ToTheLeft circular arc
+	if( edge->site().is_point() ) { // We are sampling a ToTheLeft circular arc
 		Sampling::sampleCircularArc(from-bot.center(), to-bot.center(), bot, out, true/*clockwise*/,
 				project, radiusOffset);
 		return;
@@ -180,9 +181,9 @@ extern bool gDebug;
 
 void
 VariableWidthContouring::
-samplePrintPath(Component & component, MAOffsetInfo * outerMaoi, vector<vector<Sample>> & pts) {
+samplePrintPath(Component & component, BoundaryCircles * outerMaoi, vector<vector<Sample>> & pts) {
 
-	MAOffsetInfo * innerMaoi = maoi_; // for consistent reading with outerMaoi
+	BoundaryCircles * innerMaoi = maoi_; // for consistent reading with outerMaoi
 	// We ASSUME the boundary circles information is already computed on both outerMaoi and innerMaoi
 
 	const double constantOffset = component.uniformOffset / 2.0;
@@ -212,8 +213,13 @@ samplePrintPath(Component & component, MAOffsetInfo * outerMaoi, vector<vector<S
 
 	auto lone_vertex_function = [&](const MATvert * vert) {
 		// vert has full-degree 0
-		const MATedge & edge = vert->edge[0];
-		BoundaryCircle oc = outerMaoi->boundaryCircle(edge, ToTheRight);
+		BoundaryCircle oc;
+		if( ! vert->edges_.empty() ) {
+			oc = outerMaoi->boundaryCircle(vert->edges_.front(), ToTheRight);
+		} else {
+			oc.circle_ = vert->circumcircle;
+			if( vert->is_normal() ) oc.radius() += component.uniformOffset;
+		}
 		Disk ic = vert->circumcircle;
 		if( vert->is_collapsed() ) ic.radius_ = 0;
 		double trackHalfWidth = 0.5*(oc.radius() - ic.radius_);
@@ -227,7 +233,7 @@ samplePrintPath(Component & component, MAOffsetInfo * outerMaoi, vector<vector<S
 		Sampling::sampleCircularArc({-1,0}, {1,0}, oc, out, false/*CCW*/, identity, trackHalfWidth);
 	};
 
-	auto limitAndProjectorForCollapsedPart = [&](MATvert * clipV, const MATedge * edge, const MATedge * & limit) {
+	auto limitAndProjectorForCollapsedPart = [&](MATvert * clipV, EdgeIterator edge, EdgeIterator & limit) {
 		collapsedAxis.clear();
 		gatherCollapsedSegment(edge, limit, collapsedAxis);
 		if( nullptr == collapsedAxis.subAxes[0].clippingVertex ) {
@@ -236,15 +242,15 @@ samplePrintPath(Component & component, MAOffsetInfo * outerMaoi, vector<vector<S
 		}
 	};
 
-	auto edge_function = [&](const MATedge * edge, bool makeNewCycle) {
+	auto edge_function = [&](EdgeIterator edge, bool makeNewCycle) {
 		enum ProjectionType {
 			Uniform, ToDisk, Collapse
 		};
 		while( true ) {
-			if( visited.end() != visited.find(edge) ) break; // edge already processed
+			if( visited.end() != visited.find(&(*edge)) ) break; // edge already processed
 			const MATvert * startVertex = edge->from();
 			const MATvert *   endVertex = edge->to();
-			const MATedge * limit = edge->next(true);
+			EdgeIterator limit = edge->next(true);
 			SampleFunction project = identity;
 			ProjectionType projectionType;
 			bool edge_equals_limit = false;
@@ -260,11 +266,11 @@ samplePrintPath(Component & component, MAOffsetInfo * outerMaoi, vector<vector<S
 				} else if( endVertex->is_trimmed() ) {
 					// compute limit (arrival vertex post-projection of trimmed part) and the edge
 					// that has the ToTheRight boundary circle:
-					limit = edge->ccw();
-					const MATedge * toTheRightBearer = limit;
+					limit = ccw(edge);
+					EdgeIterator toTheRightBearer = limit;
 					if( 0 < degree(startVertex) ) { // this guarantees that the while loop terminates
 						while( ! toTheRightBearer->to()->is_normal() )
-							toTheRightBearer = toTheRightBearer->ccw();
+							toTheRightBearer = ccw(toTheRightBearer);
 					}
 					ic = innerMaoi->boundaryCircle(*toTheRightBearer, ToTheRight, 0.0);
 					project = [=](const Sample & s) {
@@ -272,7 +278,7 @@ samplePrintPath(Component & component, MAOffsetInfo * outerMaoi, vector<vector<S
 					};
 					projectionType = ToDisk;
 				} else if( endVertex->is_collapsed() || endVertex->is_shaved() ) {
-					// the call below also sets the MATedge * |limit|
+					// the call below also sets the EdgeIterator |limit|
 					limitAndProjectorForCollapsedPart(edge->from(), edge->nextNotTrimmed(), limit);
 					constantOffsetForCurrentEdge = 0.0;
 					project = [&](const Sample & s) { return collapsedAxis(s); };
@@ -283,15 +289,15 @@ samplePrintPath(Component & component, MAOffsetInfo * outerMaoi, vector<vector<S
 				if( 1 <= collapsedDegree ) {
 					if( ! startVertex->targets_.empty() ) return; // will be handle by a Normal vertex
 					if( ! endVertex->is_collapsed() ) return; // will be handled from a different edge
-					// the call below also sets the MATedge * |limit|
+					// the call below also sets the EdgeIterator |limit|
 					limitAndProjectorForCollapsedPart(nullptr, edge, limit);
 					constantOffsetForCurrentEdge = 0.0;
 					project = [&](const Sample & s) { return collapsedAxis(s); };
 					projectionType = Collapse;
-					Sample s = project(getFirstSample(outerMaoi, *edge, minToolRadius_));
+					Sample s = project(getFirstSample(outerMaoi, edge, minToolRadius_));
 					collapsedAxis.reorder();
 				} else if( 0 == collapsedDegree ) { // START IS A COLLAPSED VERTEX ADJACENT TO ONLY SHAVED VERTICES (I THINK!)
-					limit = edge->ccw();
+					limit = ccw(edge);
 					Disk disk(startVertex->pos(), 0);
 					constantOffsetForCurrentEdge = 0.0;
 					project = [=](const Sample & s) {
@@ -303,6 +309,7 @@ samplePrintPath(Component & component, MAOffsetInfo * outerMaoi, vector<vector<S
 				}
 			} else {
 				cerr << "ERROR: startVertex should never be Shaved or Trimmed, but it is " << startVertex->status << endl;
+				graph.print();
 				exit(-1);
 			}
 
@@ -314,9 +321,9 @@ samplePrintPath(Component & component, MAOffsetInfo * outerMaoi, vector<vector<S
 			}
 
 			size_t firstSampleIndex = path->size();
-			const MATedge * startEdge = edge;
+			const EdgeIterator startEdge = edge;
 			while( (edge != limit) || edge_equals_limit ) {
-				if( visited.end() != visited.find(edge) ) break;
+				if( visited.end() != visited.find(&(*edge)) ) break;
 				if( innerMaoi->hasToTheRightBoundary(*edge) ) {
 					BoundaryCircle bc = innerMaoi->boundaryCircle(*edge, ToTheRight);
 					if( voids.back().empty() || (voids.back().back() != bc) ) {
@@ -330,10 +337,10 @@ samplePrintPath(Component & component, MAOffsetInfo * outerMaoi, vector<vector<S
 					//cerr << "TTL at " << voids.back().back().circle_.center_ << endl;
 				}
 				edge_equals_limit = false;
-				sampleEdge(outerMaoi, true, *edge, out,
+				sampleEdge(outerMaoi, true, edge, out,
 						project, Uniform == projectionType,
 						constantOffsetForCurrentEdge, minToolRadius_);
-				visited.insert(edge);
+				visited.insert(&(*edge));
 				edge = edge->next(/*walk_on_fire*/true);
 				collapsedAxis.jump();
 			}
@@ -376,12 +383,10 @@ samplePrintPath(Component & component, MAOffsetInfo * outerMaoi, vector<vector<S
 	for( MATvert * vert : component.vertexSet ) {
 		if( 0 < degree(vert, true) ) {
 			if( ! vert->is_normal() ) continue;
-			for( int i(0); i < 3; ++i ) {
+			for( EdgeIterator e = vert->edges_.begin(); e != vert->edges_.end(); ++e ) {
 				// we start a sampling run at a Normal vertex:
-				if( ! vert->has_neighbor(i) ) continue;
-				MATedge * edge = & vert->edge[i];
-				if( visited.end() != visited.find(edge) ) continue; // edge already processed
-				edge_function(edge, true);
+				if( visited.end() != visited.find(&(*e)) ) continue; // edge already processed
+				edge_function(e, true);
 			}
 		} else {
 			newCycle();
@@ -392,12 +397,10 @@ samplePrintPath(Component & component, MAOffsetInfo * outerMaoi, vector<vector<S
 	for( MATvert * vert : component.vertexSet ) {
 		if( ! vert->is_collapsed() ) continue;
 		if( 0 == degree(vert, true) ) continue;
-		for( int i(0); i < 3; ++i ) {
+		for( EdgeIterator e = vert->edges_.begin(); e != vert->edges_.end(); ++e ) {
 			// we start a sampling run at a Normal or Collapsed vertex:
-			if( ! vert->has_neighbor(i) ) continue;
-			MATedge * edge = & vert->edge[i];
-			if( visited.end() != visited.find(edge) ) continue; // edge already processed
-			edge_function(edge, true);
+			if( visited.end() != visited.find(&(*e)) ) continue; // edge already processed
+			edge_function(e, true);
 		}
 	}
 
