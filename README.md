@@ -17,13 +17,13 @@ found [here](https://github.com/BagelOrb/ToolpathVisualizer).
 
 ## Compilation dependencies
 
-	- CMAKE
-	- TCLAP http://tclap.sourceforge.net
-	- Clipper http://angusj.com/delphi/clipper.php
-	- CGAL https://www.cgal.org
-	- Cairo https://www.cairographics.org
+- CMAKE
+- TCLAP http://tclap.sourceforge.net
+- Clipper http://angusj.com/delphi/clipper.php
+- If the ``USE_CGAL_MEDIAL_AXIS`` CMake option is checked, then the code depends on CGAL https://www.cgal.org
+- If the ``USE_BOOST_MEDIAL_AXIS`` CMake option is checked, then the code depends on BOOST
+- If the ``USE_CAIRO_PDF`` CMake option is checked, then the code depends on Cairo https://www.cairographics.org
 
-BOOST Voronoi support should be available in the future as an alternative to CGAL.
 
 ## Compiling
 
@@ -37,7 +37,9 @@ It should work alright on macOS and Ubuntu.
 You may have to adjust the CMakeLists.txt.
 Please send us your ``pull`` requests!
 
-There is a CMake option to disable the use of Cairo. Then no PDF is ever output.
+There is the ``USE_CAIRO_PDF``CMake option to disable the use of Cairo. Then no PDF is ever output.
+
+If you compile with both ``USE_BOOST_MEDIAL_AXIS`` and ``USE_CGAL_MEDIAL_AXIS`` then a command-line option ``-b / --boost`` is added to choose to use BOOST instead of the default CGAL for computing the medial axes.
 
 ## Usage
 
