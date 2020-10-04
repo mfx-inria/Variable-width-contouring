@@ -24,7 +24,6 @@ found [here](https://github.com/BagelOrb/ToolpathVisualizer).
 - If the ``USE_BOOST_MEDIAL_AXIS`` CMake option is checked, then the code depends on BOOST
 - If the ``USE_CAIRO_PDF`` CMake option is checked, then the code depends on Cairo https://www.cairographics.org
 
-
 ## Compiling
 
 It should work alright on macOS and Ubuntu.
@@ -71,3 +70,11 @@ The set of 300 input files in input/dataset/ is the one used in the paper and
 originates from the following work:
 
 > _A framework for adaptive width control of dense contour-parallel toolpaths in fused deposition modeling_. Tim Kuipers, Eugeni L. Doubrovski, Jun Wu, and Charlie C. L. Wang. 2020. [arXiv:2004.13497 [cs.GR]](https://arxiv.org/abs/2004.13497) In submission.
+
+## Generating lots of output
+
+You can use this simple shell command:
+
+	for f in `ls ../input/*.txt ../input/dataset/*.txt`; do ./fill -p ${f}; done
+
+This will generate one PDF file and store it alongside each input file. Each page shows the state of the medial axis and the new bead.
