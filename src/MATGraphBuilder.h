@@ -11,7 +11,7 @@
 void buildMATGraphWithCGAL(MATGraph& mat, const Paths & inputPoly);
 #endif
 #if FILL_MA_BOOST
-void buildMATGraphWithBOOST(MATGraph& mat, const Paths & inputPoly);
+void buildMATGraphWithBOOST(MATGraph& mat, const Paths & inputPoly, const double units_per_mm);
 #endif
 
 #endif // _FILL_MAT_GRAPH_BUILDER_H_

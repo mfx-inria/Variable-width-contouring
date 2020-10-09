@@ -333,16 +333,19 @@ int main(int argc, char **argv) {
 	Chronograph MATTimer("MAT building");
 	MATTimer.start();
 #if (FILL_MA_BOOST && FILL_MA_CGAL)
-	if( gUseBoost )
-		buildMATGraphWithBOOST(mat, inputPoly);
-	else
+	if( gUseBoost ) {
+                if( gVerbose ) { cerr << "[BOOST]"; }
+		buildMATGraphWithBOOST(mat, inputPoly, 1000.0);
+        } else {
+                if( gVerbose ) { cerr << "[CGAL]"; }
 		buildMATGraphWithCGAL(mat, inputPoly);
+        }
 #elif FILL_MA_BOOST
-		buildMATGraphWithBOOST(mat, inputPoly);
+		buildMATGraphWithBOOST(mat, inputPoly, 1000.0);
 #else
 		buildMATGraphWithCGAL(mat, inputPoly);
 #endif
-	//mat.print();
+	mat.print();
 	MATTimer.stop();
 	mat.debugCheck();
 

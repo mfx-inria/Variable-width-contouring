@@ -53,8 +53,8 @@ namespace boost {
     }  // polygon
 }  // boost
 
-Vec2i convert2d22i(const Vec2d & v) {
-    Vec2d vv = 1024.0 * v;
+inline Vec2i convert2d22i(const double scale, const Vec2d & v) {
+    Vec2d vv = scale * v;
     return Vec2i(static_cast<int>(round(vv.x())), static_cast<int>(round(vv.y())));
 }
 
@@ -63,9 +63,9 @@ using VPtr = const VD::vertex_type *;
 using EPtr = const VD::edge_type *;
 using CPtr = const VD::cell_type *;
 
-void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths);
+void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths, const double mm_per_unit);
 
-void buildMATGraphWithBOOST(MATGraph& mat, const Paths & inputPoly) {
+void buildMATGraphWithBOOST(MATGraph& mat, const Paths & inputPoly, const double units_per_mm) {
     // For now we ASSUME the input is in MILLImeters and we convert to INTEGER MICROmeter
     if (inputPoly.empty()) return;
 
@@ -79,15 +79,23 @@ void buildMATGraphWithBOOST(MATGraph& mat, const Paths & inputPoly) {
         paths.emplace_back();
         CLPath & p = paths.back();
         for( const auto & pt : path ) {
-            Vec2i v = convert2d22i(pt);
+            Vec2i v = convert2d22i(units_per_mm, pt);
             p.emplace_back(v.x(), v.y());
         }
     }
-	ClipperLib::SimplifyPolygons(paths, ClipperLib::pftEvenOdd);
-	buildMATGraphWithBOOST(mat, paths);
+    ClipperLib::SimplifyPolygons(paths, ClipperLib::pftEvenOdd);
+    // FOR DEBUG
+    for( const auto & pp : paths ) {
+        cerr << "\n path: ";
+        for( const auto & p : pp ) {
+            cerr << '(' << p.X << ", " << p.Y << ") ";
+        }
+    }
+    // END OF DEBUG
+    buildMATGraphWithBOOST(mat, paths, 1.0/units_per_mm);
 }
 
-void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths) {
+void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths, const double mm_per_unit) {
 	if( paths.empty() ) return;
     // Go
     std::vector<Segment> segments;
@@ -119,9 +127,9 @@ void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths) {
 		std::size_t index = cell->source_index();
 		const Segment & s = segments[index];
 		Vec2i p0 = boost::polygon::low(s);
-		Vec2d p0d = (1.0 / 1024.0) * Vec2d(p0.x(), p0.y());
+		Vec2d p0d = mm_per_unit * Vec2d(p0.x(), p0.y());
 		Vec2i p1 = boost::polygon::high(s);
-		Vec2d p1d = (1.0 / 1024.0) * Vec2d(p1.x(), p1.y());
+		Vec2d p1d = mm_per_unit * Vec2d(p1.x(), p1.y());
 		if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_START_POINT) {
 			return Site(p0d);
 		} else if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_END_POINT) {
@@ -131,7 +139,7 @@ void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths) {
 	};
 
     auto voronoiCircumcircle = [&](const VPtr v) -> Disk {
-        Vec2d p = (1.0 / 1024.0) * Vec2d(v->x(), v->y());
+        Vec2d p = mm_per_unit * Vec2d(v->x(), v->y());
         EPtr first_edge = v->incident_edge();
         EPtr edge = first_edge;
         do {
@@ -146,13 +154,13 @@ void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths) {
         CPtr cell = edge->cell();
         std::size_t index = cell->source_index();
         const Segment & s = segments[index];
-        Vec2d p0d = (1.0 / 1024.0) * Vec2d(s.p0.x(), s.p0.y());
-        Vec2d p1d = (1.0 / 1024.0) * Vec2d(s.p1.x(), s.p1.y());
+        Vec2d p0d = mm_per_unit * Vec2d(s.p0.x(), s.p0.y());
+        Vec2d p1d = mm_per_unit * Vec2d(s.p1.x(), s.p1.y());
         return Disk(p, Utils::distanceToLine(p, p0d, p1d-p0d));
     };
 
-    auto printV = [](const VD::vertex_type * v) {
-        cerr << '(' << (v->x()/1024.0) << ", " << (v->y()/1024.0) << ')';
+    auto printV = [=](const VD::vertex_type * v) {
+        cerr << '(' << (v->x() * mm_per_unit) << ", " << (v->y() * mm_per_unit) << ')';
     };
 
     auto analyze = [&](const VD::vertex_type * v, bool & is_input, int & degree, int & n_secondaries) {

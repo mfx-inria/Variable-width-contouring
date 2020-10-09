@@ -10,11 +10,18 @@ option(USE_BOOST_MEDIAL_AXIS "Compile with BOOST and use it to compute the media
 
 option(USE_CAIRO_PDF "Compile with libcairo to enable PDF output." ON)
 
+option(WITH_ICESL_PLUGIN "Add a second build target for building a plugin for IceSL" OFF)
+
 if( NOT WIN32 )
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 endif()
 
 # = = = = = = = = = = = = = = = = MUST HAVE AT LEAST ONE WAY TO COMPUTE MEDIAL AXIS
+
+if( WITH_ICESL_PLUGIN )
+    set(USE_BOOST_MEDIAL_AXIS ON)
+    ADD_SUBDIRECTORY(icesl-interface)
+endif()
 
 if( (NOT USE_CGAL_MEDIAL_AXIS) AND (NOT USE_BOOST_MEDIAL_AXIS) )
     message(FATAL_ERROR "Please choose at least one way to compute the medial-axis.")
@@ -22,15 +29,31 @@ endif()
 
 # = = = = = = = = = = = = = = = = SOURCES
 
+set(BASE_SOURCES
+src/MATGraph.cpp
+src/utils.cpp
+src/VariableWidthContouringSampling.cpp
+src/Sampling.cpp
+src/VariableWidthContouring.cpp
+src/VariableWidthContouringLabeling.cpp
+src/vec.cpp)
+
 include_directories("${PROJECT_SOURCE_DIR}")
-file(GLOB_RECURSE FILL_SOURCES      src/*.cpp)
+
+set(PLUGIN_SOURCES ${BASE_SOURCES} src/VWCInfillerPlugin.cpp)
+
+set(FILL_SOURCES ${BASE_SOURCES}
+    src/main.cpp)
+
+# = = = = = = = = = = = = = = = = CLIPPER
+
+find_library(CLIPPER_LIB polyclipping)
 
 # = = = = = = = = = = = = = = = = CGAL
 
+set(CGAL_C_VALUE 0)
 if(USE_CGAL_MEDIAL_AXIS)
-
     set(CGAL_DO_NOT_WARN_ABOUT_CMAKE_BUILD_TYPE true)
-
     if(WIN32)
       set(CGAL_DIR "C:/dev/CGAL-4.10/")
       LIST(APPEND CMAKE_MODULE_PATH "C:/dev/CGAL-4.10/cmake/modules/")
@@ -42,30 +65,25 @@ if(USE_CGAL_MEDIAL_AXIS)
     include (${CGAL_USE_FILE})
     include_directories(${CGAL_INCLUDE_DIRS})
     message(STATUS "CGAL include: ${CGAL_INCLUDE_DIRS}")
-
-    set(LIBS ${LIBS} ${CGAL_LIBRARIES})
-
+    set(FILL_LIBS ${CGAL_LIBRARIES})
     set(CGAL_C_VALUE 1)
-else(USE_CGAL_MEDIAL_AXIS)
-    list(REMOVE_ITEM FILL_SOURCES ${PROJECT_SOURCE_DIR}/src/MATGraphBuilder_with_CGAL.cpp)
-    set(CGAL_C_VALUE 0)
+    set(FILL_SOURCES ${FILL_SOURCES} src/MATGraphBuilder_with_CGAL.cpp)
 endif()
 
 # = = = = = = = = = = = = = = = = BOOST
 
+set(BOOST_C_VALUE 0)
 if(USE_BOOST_MEDIAL_AXIS)
     if( NOT USE_CGAL_MEDIAL_AXIS )
         set(Boost_USE_STATIC_LIBS OFF)
         set(Boost_USE_MULTITHREADED ON)
         set(Boost_USE_STATIC_RUNTIME OFF)
-        find_package(Boost 1.50)# REQUIRED COMPONENTS filesystem)
+        find_package(Boost 1.50)
         include_directories(${Boost_INCLUDE_DIRS})
     endif( NOT USE_CGAL_MEDIAL_AXIS )
     set(BOOST_C_VALUE 1)
-else(USE_BOOST_MEDIAL_AXIS)
-    list(REMOVE_ITEM FILL_SOURCES ${PROJECT_SOURCE_DIR}/src/MATGraphBuilder_with_BOOST.cpp)
-    list(REMOVE_ITEM FILL_SOURCES ${PROJECT_SOURCE_DIR}/src/VariableWidthContouringForIceSL.cpp)
-    set(BOOST_C_VALUE 0)
+    set(FILL_SOURCES ${FILL_SOURCES} src/MATGraphBuilder_with_BOOST.cpp)
+    set(PLUGIN_SOURCES ${PLUGIN_SOURCES} src/MATGraphBuilder_with_BOOST.cpp)
 endif(USE_BOOST_MEDIAL_AXIS)
 
 # = = = = = = = = = = = = = = = = CAIRO
@@ -74,36 +92,32 @@ set(NO_CAIRO_C_VALUE 1)
 if(USE_CAIRO_PDF)
     set(NO_CAIRO_C_VALUE 0)
     find_library(CAIRO_LIBRARY NAMES cairo)
-    set(LIBS ${LIBS} ${CAIRO_LIBRARY})
-else(USE_CAIRO_PDF)
-	list(REMOVE_ITEM FILL_SOURCES ${PROJECT_SOURCE_DIR}/src/CairoSurface.cpp)
+    set(FILL_LIBS ${FILL_LIBS} ${CAIRO_LIBRARY})
+    set(FILL_SOURCES ${FILL_SOURCES} src/CairoSurface.cpp)
 endif(USE_CAIRO_PDF)
 
-# configure a header file to pass some of the CMake settings
-# to the source code
+# configure a header file to pass some of the CMake settings to the source code
 configure_file(
   "${PROJECT_SOURCE_DIR}/fill_config.h.in"
   "${PROJECT_BINARY_DIR}/fill_config.h"
 )
 include_directories(${PROJECT_BINARY_DIR})
 
-# ================================
+# = = = = = = = = = = = = = = = = FILL EXECUTABLE
 
-if(APPLE)
-	set(LIBS ${LIBS} "/opt/local/lib/libpolyclipping.dylib")
-else(APPLE)
-	set(LIBS ${LIBS} "/usr/local/lib/libpolyclipping.so")
-endif(APPLE)
-
-#set_source_files_properties(${FILL_SOURCES} PROPERTIES COMPILE_FLAGS "${CPP11_FLAG}")
-
-set(SOURCES ${FILL_SOURCES} ${lib_sources})
-
-set(APP_NAME fill)
-
-add_executable(${APP_NAME} ${SOURCES})
-target_link_libraries(${APP_NAME} ${LIBS})
+add_executable(fill ${FILL_SOURCES})
+target_link_libraries(fill ${FILL_LIBS})
+if(USE_BOOST_MEDIAL_AXIS)
+target_link_libraries(fill ${CLIPPER_LIB})
+endif()
 
 message( STATUS "FILL_SOURCES: " ${FILL_SOURCES})
-message( STATUS "LIBS: " ${LIBS} )
+message( STATUS "FILL_LIBS: " ${FILL_LIBS} )
 
+# = = = = = = = = = = = = = = = = ICESL PLUGIN
+
+if(WITH_ICESL_PLUGIN)
+set(PNAME variableWidthContouring)
+add_library(${PNAME} MODULE ${PLUGIN_SOURCES})
+target_link_libraries(${PNAME} icesl_interface)
+endif()
