@@ -18,9 +18,11 @@ endif()
 
 # = = = = = = = = = = = = = = = = MUST HAVE AT LEAST ONE WAY TO COMPUTE MEDIAL AXIS
 
+set(ICESL_PLUGIN_VALUE 0)
 if( WITH_ICESL_PLUGIN )
     set(USE_BOOST_MEDIAL_AXIS ON)
     ADD_SUBDIRECTORY(icesl-interface)
+    set(ICESL_PLUGIN_VALUE 1)
 endif()
 
 if( (NOT USE_CGAL_MEDIAL_AXIS) AND (NOT USE_BOOST_MEDIAL_AXIS) )
@@ -105,14 +107,13 @@ include_directories(${PROJECT_BINARY_DIR})
 
 # = = = = = = = = = = = = = = = = FILL EXECUTABLE
 
-add_executable(fill ${FILL_SOURCES})
-target_link_libraries(fill ${FILL_LIBS})
-if(USE_BOOST_MEDIAL_AXIS)
-target_link_libraries(fill ${CLIPPER_LIB})
+if(NOT WITH_ICESL_PLUGIN)
+    add_executable(fill ${FILL_SOURCES})
+    target_link_libraries(fill ${FILL_LIBS})
+    if(USE_BOOST_MEDIAL_AXIS)
+        target_link_libraries(fill ${CLIPPER_LIB})
+    endif()
 endif()
-
-message( STATUS "FILL_SOURCES: " ${FILL_SOURCES})
-message( STATUS "FILL_LIBS: " ${FILL_LIBS} )
 
 # = = = = = = = = = = = = = = = = ICESL PLUGIN
 

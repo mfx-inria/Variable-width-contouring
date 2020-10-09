@@ -8,7 +8,11 @@ using boost::polygon::voronoi_diagram;
 #include "MATGraphBuilder.h"
 #include "utils.h"
 
+#if ICESL_PLUGIN==1
+#include <clipper.hpp>
+#else
 #include <polyclipping/clipper.hpp>
+#endif
 
 #include <stack>
 
@@ -84,59 +88,39 @@ void buildMATGraphWithBOOST(MATGraph& mat, const Paths & inputPoly, const double
         }
     }
     ClipperLib::SimplifyPolygons(paths, ClipperLib::pftEvenOdd);
-    // FOR DEBUG
-    for( const auto & pp : paths ) {
-        cerr << "\n path: ";
-        for( const auto & p : pp ) {
-            cerr << '(' << p.X << ", " << p.Y << ") ";
-        }
-    }
-    // END OF DEBUG
     buildMATGraphWithBOOST(mat, paths, 1.0/units_per_mm);
 }
 
 void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths, const double mm_per_unit) {
-	if( paths.empty() ) return;
-    // Go
-    std::vector<Segment> segments;
-    for( const auto & path : paths ) {
-        const size_t N = path.size();
-		//cerr << "OUT PATH OF SIZE " << N << endl;
-		// We always insert loops.
-		// So any point is adjacent to an even number of edges (unless degenerate cases).
-        CLPoint p0 = path[N-1];
-        for( const auto & p : path ) {
-            CLPoint p1 = p;
-            segments.emplace_back(p0, p1);
-            p0 = p1;
+    if( paths.empty() ) return;
+
+    auto isPointSite = [&](CPtr cell) -> bool {
+        // FIXME: is it equivalent to cell->contains_point()?
+        // if so, use it.
+        if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_START_POINT) {
+            return true;
+        } else if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_END_POINT) {
+            return true;
         }
-    }
+        return false;
+    };
 
-	auto isPointSite = [&](CPtr cell) -> bool {
-		// FIXME: is it equivalent to cell->contains_point()?
-		// if so, use it.
-		if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_START_POINT) {
-			return true;
-		} else if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_END_POINT) {
-			return true;
-		}
-		return false;
-	};
+    std::vector<Segment> segments;
 
-	auto toSite = [&](CPtr cell) {
-		std::size_t index = cell->source_index();
-		const Segment & s = segments[index];
-		Vec2i p0 = boost::polygon::low(s);
-		Vec2d p0d = mm_per_unit * Vec2d(p0.x(), p0.y());
-		Vec2i p1 = boost::polygon::high(s);
-		Vec2d p1d = mm_per_unit * Vec2d(p1.x(), p1.y());
-		if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_START_POINT) {
-			return Site(p0d);
-		} else if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_END_POINT) {
-			return Site(p1d);
-		}
-		return Site(p0d, p1d);
-	};
+    auto toSite = [&](CPtr cell) {
+        std::size_t index = cell->source_index();
+        const Segment & s = segments[index];
+        Vec2i p0 = boost::polygon::low(s);
+        Vec2d p0d = mm_per_unit * Vec2d(p0.x(), p0.y());
+        Vec2i p1 = boost::polygon::high(s);
+        Vec2d p1d = mm_per_unit * Vec2d(p1.x(), p1.y());
+        if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_START_POINT) {
+            return Site(p0d);
+        } else if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_END_POINT) {
+            return Site(p1d);
+        }
+        return Site(p0d, p1d);
+    };
 
     auto voronoiCircumcircle = [&](const VPtr v) -> Disk {
         Vec2d p = mm_per_unit * Vec2d(v->x(), v->y());
@@ -146,9 +130,9 @@ void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths, const double m
             CPtr cell = edge->cell();
             std::size_t index = cell->source_index();
             const Segment & s = segments[index];
-			Site site = toSite(cell);
-			if( site.is_point() )
-				return Disk(p, (p-site.point()).length());
+            Site site = toSite(cell);
+            if( site.is_point() )
+                return Disk(p, (p-site.point()).length());
             edge = edge->rot_next();
         } while( edge != first_edge );
         CPtr cell = edge->cell();
@@ -180,6 +164,19 @@ void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths, const double m
 		} while( edge != first_edge );
 	};
 
+    // Go
+    for( const auto & path : paths ) {
+        const size_t N = path.size();
+		//cerr << "OUT PATH OF SIZE " << N << endl;
+		// We always insert loops.
+		// So any point is adjacent to an even number of edges (unless degenerate cases).
+        CLPoint p0 = path[N-1];
+        for( const auto & p : path ) {
+            CLPoint p1 = p;
+            segments.emplace_back(p0, p1);
+            p0 = p1;
+        }
+    }
     VD vd;
     construct_voronoi(segments.begin(), segments.end(), &vd);
     //cerr << "BOOST Voronoi built over " << segments.size() << " input segments\n";

@@ -56,7 +56,6 @@ void VWCInfiller::terminateInfill(int brush)
 
 void VWCInfiller::prepareInfillForSlice(int id, const AAB<2, int>& xy_slice_box, float height, int brush)
 {
-    cerr << "VWC PREPARE INFILL FOR SLICE " << id << "... ";
     /// retrive extruder used for the infill by this brush
     int extruder_id = 0;
     {
@@ -89,9 +88,6 @@ void VWCInfiller::prepareInfillForSlice(int id, const AAB<2, int>& xy_slice_box,
     }
     xy_mm_per_unit_ = scale;
 
-    cerr << "UNIT PER MM IS " << (1.0 / xy_mm_per_unit_) << "\n";
-    cerr << "MIN NEAD WIDTH (MM) IS " << (minBeadWidth_) << "\n";
-    cerr << "MAX NEAD WIDTH (MM) IS " << (maxBeadWidth_) << "\n";
     /*// retrieve line width
     float line_width_mm = 0.0f;
     {
@@ -101,7 +97,6 @@ void VWCInfiller::prepareInfillForSlice(int id, const AAB<2, int>& xy_slice_box,
         }
         s->getValue(line_width_mm);
     }*/
-    cerr << "DONE\n";
 }
 
 // ----------------------------------------------- 
@@ -111,14 +106,6 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
         std::vector<std::unique_ptr<IceSLInterface::IPath> > & fills,
         bool & preserve_order)
 {
-    cerr << "VWC GO-GO_GADGET-AU FILL for slice " << slice_id << "... ";
-    for( const auto & pp : surface ) {
-        cerr << "\n path: ";
-        for( const auto & p : pp ) {
-            cerr << '(' << p.X << ", " << p.Y << ") ";
-        }
-    }
-    cerr << endl;
     // work data
     MATGraph mat_;
     BoundaryCircles maoi_[2];
@@ -134,16 +121,10 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
     Components components;
 
     MATGraph mat;
-    // FOR DEBUG (dow we want to keep it in prod?
-    //CLPaths slice = surface;
-    //ClipperLib::SimplifyPolygons(slice, ClipperLib::pftEvenOdd);
-    //buildMATGraphWithBOOST(mat, slice, xy_mm_per_unit_);
-    // END OF DEBUG
     buildMATGraphWithBOOST(mat, surface, xy_mm_per_unit_);
-    mat.print();
+    //mat.print();
     mat.debugCheck();
     if( mat.verts.empty() ) {
-        cerr << " NO MEDIAL AXIS ";
         return false;
     }
 
@@ -188,7 +169,7 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
     // GO!
 
     int step = -1;
-    while( step < 5 ) {
+    while( step < 5000 ) {
         ++step;
         // Compute connected components. We work on each separately, so that the uniform offset can be customized to each.
         components.clear();
@@ -248,13 +229,11 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
         for( Component & comp : components ) {
             sdg.computeSmoothPaths(comp, comp.innerSmoothPaths); // also fills maoi_[0]
         }
-        cerr << "A ";
 
         pts.clear();
         for( Component & comp : components ) {
             sdg.samplePrintPath(comp, & maoi_[1], pts);
         }
-        cerr << "B ";
         if( ! hadSomeCollapse ) {
             for( Component & comp : components ) {
                 comp.voids.clear();
@@ -262,14 +241,12 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
         }
         cheekPrecursors.clear();
 
-        cerr << "F ";
         // output
         CLPath clipperPath;
         std::vector<double> beadWidth;
         for( const auto & samples : pts ) {
             nbSamples += samples.size();
             if( samples.empty() ) continue;
-            cerr << "G ";
             Vec2d q = samples.back().pos;
             for( const auto & p : samples ) {
                 if( p.radius > maxToolRadius * 1.01 )
@@ -294,7 +271,6 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
             }
             clipperPath.clear();
             beadWidth.clear();
-            cerr << "In step " << step << ", now up to " << nbSamples << " samples\n";
 #if 0 // Check angle formed by 3 consecutive samples
                 const int N = samples.size();
                 for( int i1 = 0; i1 < N; ++i1 ) {
@@ -324,7 +300,6 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
         mat.removeDestroyed();
     }
     if( verbose_ ) cerr << endl << nbSamples << " samples.\n";
-    cerr << "DONE\n";
     return true;
 }
 
