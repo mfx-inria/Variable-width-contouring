@@ -167,7 +167,7 @@ void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths, const double m
     // Go
     for( const auto & path : paths ) {
         const size_t N = path.size();
-		//cerr << "OUT PATH OF SIZE " << N << endl;
+		if( N < 3 ) continue;
 		// We always insert loops.
 		// So any point is adjacent to an even number of edges (unless degenerate cases).
         CLPoint p0 = path[N-1];

@@ -827,6 +827,14 @@ void
 MATGraph::
 splitApexes()
 {
+	struct Insertion {
+		EdgeIterator edge;
+		Vec2d mid;
+		double radius;
+		Insertion(const EdgeIterator e, const Vec2d & v, const double r) : edge(e), mid(v),
+		radius(r) {}
+	};
+	list<Insertion> insertions;
 	for ( MATvert & vert : verts ) {
 		for( EdgeIterator edge_it = vert.edges_.begin(); edge_it != vert.edges_.end(); ++edge_it ) {
 			MATedge & edge = *edge_it;
@@ -858,9 +866,12 @@ splitApexes()
 				y_dir.normalize();
 				Vec2d mid = 0.5 * (a + b);
 				double radius = y_dir.dot(a-base) * 0.5;
-				insert(nullptr, edge_it, Disk(mid, std::fabs(radius)));
+				insertions.emplace_back(edge_it, mid, std::fabs(radius));
 			}
 		}
+	}
+	for( auto & ins : insertions ) {
+		insert(nullptr, ins.edge, Disk(ins.mid, ins.radius));
 	}
 }
 

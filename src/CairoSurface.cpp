@@ -190,13 +190,13 @@ drawPolygons(const Paths & paths) {
 		cairo_set_source_rgb(context_, 0.8, 0.8, 0.8);
 	}
 	cairo_save(context_);
-	cairo_set_line_width(context_, 1.0/scale_);
+	cairo_set_line_width(context_, lineWidthMultiplier_/scale_);
 	polygonPath(paths);
 	cairo_set_fill_rule(context_, CAIRO_FILL_RULE_EVEN_ODD);
 	cairo_fill(context_);
 	if( drawVertices_ ) {
 		cairo_set_line_cap(context_, CAIRO_LINE_CAP_ROUND);
-		cairo_set_line_width(context_, bbox_.diagonal() / 900.0);
+		cairo_set_line_width(context_, lineWidthMultiplier_ * bbox_.diagonal() / 50.0);
 		cairo_set_source_rgb(context_, 1.0, 0.1, 0.1);
 		for( const auto & path : paths ) {
 			if( path.size() < 3 ) continue;

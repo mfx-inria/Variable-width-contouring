@@ -126,40 +126,42 @@ public:
 		sampling.push_back(makeVP(v1));
 		typename list<VP>::iterator it1 = sampling.begin(), it0 = it1++, last;
 		last = --sampling.end();
-//#define FILL_SUBDIV_LIMIT 100
+#define FILL_SUBDIV_LIMIT 1000
 #ifdef FILL_SUBDIV_LIMIT
 		int N(0);
+		bool last_split_was_half = false;
 		while( (N < FILL_SUBDIV_LIMIT) && it1 != sampling.end() ) {
 			++N;
 #else
 		while( it1 != sampling.end() ) {
 #endif
+			//cerr << "sampling circular arc: [" <<N<<"] it0->v = " << it0->v << ", it1->v = " << it1->v;
 			if( is_good_sample(it0->projected, it1->projected) ) {
+				//cerr << " --> good\n";
 				out(it1->projected);
 				it0 = it1++;
+				last_split_was_half = false;
 			} else { // splitting
-#ifdef FILL_SUBDIV_LIMIT
-				if( N == 1000) {
-					cerr << "sampling circular arc: " << it1->v << ", v0=" << v0 << ", v1=" << v1
-						<< ", delta=" << delta << endl;
-				}
-#endif
-#undef FILL_SUBDIV_LIMIT
-				if( (it1 != last) && ((it0->v | it1->v) > 0.0) ) {
+				if( (!last_split_was_half) && (it1 != last) && ((it0->v | it1->v) > 0.0) ) {
+					//cerr << " --> splitThree (dot product is " << (it0->v|it1->v) << ")\n";
 					it1 = sampling.erase(it1);
 					Vec2d d = it1->v - it0->v;
 					double k = 2.0/3.0;
 					it1 = sampling.insert(it1, makeVP(it0->v + (k * d)));
 					k = 1.0/3.0;
 					it1 = sampling.insert(it1, makeVP(it0->v + (k * d)));
+					last_split_was_half = false;
 				} else { // split in 2
+					//cerr << " --> splitHalf\n";
 					double k = 1.0/2.0;
 					it1 = sampling.insert(it1, makeVP(splitArcInHalf(it0->v, it1->v, clockwise)));
+					last_split_was_half = true;
 				}
 			}
 		}
 	}
 };
 
+#undef FILL_SUBDIV_LIMIT
 
 #endif // _CAVITIES_SAMPLING_H_

@@ -1,5 +1,6 @@
 #include "VWCInfillerPlugin.h"
 #include "Path.h"
+#include "clipper_addons.h"
 
 #include "VariableWidthContouring.h"
 
@@ -56,7 +57,7 @@ void VWCInfiller::terminateInfill(int brush)
 
 void VWCInfiller::prepareInfillForSlice(int id, const AAB<2, int>& xy_slice_box, float height, int brush)
 {
-    /// retrive extruder used for the infill by this brush
+    /// retrieve extruder used for the infill by this brush
     int extruder_id = 0;
     {
         auto s = m_EnumerableSettings->getSettingByName("infill_extruder_" + std::to_string(brush));
@@ -101,6 +102,87 @@ void VWCInfiller::prepareInfillForSlice(int id, const AAB<2, int>& xy_slice_box,
 
 // ----------------------------------------------- 
 
+void printPaths(const CLPaths & paths) {
+    for( auto & path : paths ) {
+        cerr << path.size() << '\n';
+        for( const auto & p : path ) {
+            cerr << p.X << ' ' << p.Y << '\n';
+        }
+    }
+}
+
+//static void cleanInput(const CLPaths & surface, CLPaths & clean, bool verbose = false) {
+//    CLPaths tempPaths = surface;
+//    if( verbose ) {
+//        cerr << "----------------------------------\n";
+//        for( auto & path : surface ) {
+//            cerr << "INPUT PATH :\n" << path.size() << '\n';
+//            for( const auto & p : path ) {
+//                cerr << p.X << ' ' << p.Y << '\n';
+//            }
+//        }
+//        cerr << " - - - - - - - - - - -> \n";
+//    }
+//    for( const CLPath & temp : tempPaths ) {
+//        if( temp.size() <= 2 ) continue;
+//        clean.emplace_back();
+//        CLPath & path = clean.back();
+//        path.push_back(temp[0]);
+//        int i(0), j(1), k(2), numV(temp.size());
+//        while( j > i ) {
+//            if( temp[i] == temp[j] ) { // duplicate vertices
+//                cerr << "KILLED a Duplicate vertex: bad input file" << endl;
+//                j = k;
+//                k = (k+1) % numV;
+//                continue;
+//            }
+//            ClipperLib::IntPoint v0 = subPoints(temp[j], temp[i]);
+//            ClipperLib::IntPoint v1 = subPoints(temp[k], temp[j]);
+//            double lenProd = cautiousLength(v0) * cautiousLength(v1);
+//            double ddot, ddet;
+//#ifndef use_int32
+//            if (true) {//UseFullInt64Range) {
+//                ddot = dot128(v0, v1);
+//                ddet = det128(v0, v1);
+//            }
+//            else
+//#endif
+//            {
+//                ddot = dot(v0, v1);
+//                ddet = det(v0, v1);
+//            }
+//            if( (ddot < (-0.999999)*lenProd) && (std::abs(ddet) < 1e-6*lenProd) ) {
+//                cerr << "KILLED a U-turn: bad input file" << endl;
+//                j = k;
+//                k = (k+1)%numV;
+//                continue;
+//            }
+//            if( (ddot > 0.999999*lenProd) && (std::abs(ddet) < 1e-6*lenProd) ) {
+//                cerr << "KILLED a colinearity at " << temp[j] << ": bad input file" << endl;
+//                j = k;
+//                k = (k+1)%numV;
+//                continue;
+//            }
+//            path.push_back(temp[j]);
+//            i = j;
+//            j = k;
+//            k = (k+1)%numV;
+//        }
+//        if( verbose ) {
+//            cerr << path.size() << '\n';
+//            for( const auto & p : path ) {
+//                cerr << p.X << ' ' << p.Y << '\n';
+//            }
+//        }
+//    }
+//        if( verbose ) {
+//            cerr << "=========================\n";
+//        }
+//    ClipperLib::CleanPolygons(clean);
+//}
+
+// ----------------------------------------------- 
+
 bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
         const ClipperLib::Paths & surface,
         std::vector<std::unique_ptr<IceSLInterface::IPath> > & fills,
@@ -121,8 +203,22 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
     Components components;
 
     MATGraph mat;
+#if 1
+    CLPaths input = surface;
+    bool debug = false;//slice_id == 26;
+    if( debug ) {
+        cerr << "SLICE " << slice_id << ", input paths:\n";
+        printPaths(surface);
+    }
+    ClipperLib::CleanPolygons(input);
+    if( debug ) {
+        cerr << "Cleaned paths (mm_per_unit = "<<xy_mm_per_unit_<<"):\n";
+        printPaths(input);
+    }
+    buildMATGraphWithBOOST(mat, input, xy_mm_per_unit_);
+#else
     buildMATGraphWithBOOST(mat, surface, xy_mm_per_unit_);
-    //mat.print();
+#endif
     mat.debugCheck();
     if( mat.verts.empty() ) {
         return false;
@@ -152,18 +248,19 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
         CLint y = static_cast<CLint>(round(p.pos.y() / xy_mm_per_unit_));
         if( (! path.empty()) && (path.back().X == x) && (path.back().Y == y) ) return false;
         path.push_back({x,y});
-        bw.push_back(p.radius*2.0);
+        bw.push_back(p.radius*2.0/nozzle_diameter_);
         return true;
     };
 
     auto closePath = [](CLPath & path, std::vector<double> & bw) {
-        if( path.size() < 3 ) { path.clear(); return; }
+        if( path.size() < 3 ) { path.clear(); bw.clear(); return false; }
         const CLPoint & first = path[0];
         const CLPoint & last = path.back();
         if( first != last ) {
             path.push_back(first);
             bw.push_back(bw.front());
         }
+        return true;
     };
 
     // GO!
@@ -178,7 +275,10 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
             break;
         }
         else {
-            if( verbose_ ) cerr << ((step%10) ? '.':'|');
+            if( debug ) {
+                cerr << "VWC STEP " << step << endl;
+                mat.print();
+            }
         }
         // Update maoi and the smooth contour
         maoi_[0].clear();
@@ -250,10 +350,10 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
             Vec2d q = samples.back().pos;
             for( const auto & p : samples ) {
                 if( p.radius > maxToolRadius * 1.01 )
-                    cerr << "ERROR : output extrusion radius is too large: "
+                    cerr << "ERROR at slice " << slice_id << " step " << step << ": output extrusion radius is too large: "
                         << p.radius << " >> " << maxToolRadius << " at " << p.pos << endl;
                 if( p.radius < minToolRadius / 1.01 )
-                    cerr << "ERROR : output extrusion radius is too small: "
+                    cerr << "ERROR at slice " << slice_id << " step " << step << " : output extrusion radius is too small: "
                         << p.radius << " << " << minToolRadius << " at " << p.pos << endl;
                 //outpath << p.pos.x() << ' ' << p.pos.y() << ' ' << p.radius << ' ' << p.tangent.x() << ' ' << p.tangent.y() << endl;
                 totalLength += (q-p.pos).length();
@@ -261,13 +361,14 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
                 if( insertPoint(p, clipperPath, beadWidth) ) {
                 }
             }
-            closePath(clipperPath, beadWidth);
-            fills.push_back(std::unique_ptr<IceSLInterface::IPath>(new IceSLInterface::Path()));
-            fills.back()->createPath(clipperPath, true);
-            // customize flow
-            int flow_idx = fills.back()->addPerVertexAttribute("flow_multiplier");
-            for( int i = 0; i < beadWidth.size(); ++i ) {
-                fills.back()->setPerVertexAttributeValue(flow_idx, i, beadWidth[i]);
+            if( closePath(clipperPath, beadWidth) ) {
+                fills.push_back(std::unique_ptr<IceSLInterface::IPath>(new IceSLInterface::Path()));
+                fills.back()->createPath(clipperPath, true);
+                // customize flow
+                int flow_idx = fills.back()->addPerVertexAttribute("flow_multiplier");
+                for( int i = 0; i < beadWidth.size(); ++i ) {
+                    fills.back()->setPerVertexAttributeValue(flow_idx, i, beadWidth[i]);
+                }
             }
             clipperPath.clear();
             beadWidth.clear();
@@ -299,7 +400,8 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
 
         mat.removeDestroyed();
     }
-    if( verbose_ ) cerr << endl << nbSamples << " samples.\n";
+    //if( verbose_ ) cerr << endl << nbSamples << " samples.\n";
+    //cerr << "Total length = " << totalLength << endl;
     return true;
 }
 

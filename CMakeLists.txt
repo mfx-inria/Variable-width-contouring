@@ -42,7 +42,9 @@ src/vec.cpp)
 
 include_directories("${PROJECT_SOURCE_DIR}")
 
-set(PLUGIN_SOURCES ${BASE_SOURCES} src/VWCInfillerPlugin.cpp)
+set(PLUGIN_SOURCES ${BASE_SOURCES}
+    src/VWCInfillerPlugin.cpp
+    src/clipper_addons.cpp)
 
 set(FILL_SOURCES ${BASE_SOURCES}
     src/main.cpp)

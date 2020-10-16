@@ -36,7 +36,6 @@ class VWCInfiller : public IceSLInterface::IInfillerInterface
     protected:
 
         // various parameters
-        bool debug_ = false;
         bool verbose_ = false;
 
         // work parameters

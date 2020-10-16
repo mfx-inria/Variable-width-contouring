@@ -335,13 +335,13 @@ int main(int argc, char **argv) {
 #if (FILL_MA_BOOST && FILL_MA_CGAL)
 	if( gUseBoost ) {
                 if( gVerbose ) { cerr << "[BOOST]"; }
-		buildMATGraphWithBOOST(mat, inputPoly, 1024.0);
+		buildMATGraphWithBOOST(mat, inputPoly, 1000.0);
         } else {
                 if( gVerbose ) { cerr << "[CGAL]"; }
 		buildMATGraphWithCGAL(mat, inputPoly);
         }
 #elif FILL_MA_BOOST
-		buildMATGraphWithBOOST(mat, inputPoly, 1024.0);
+		buildMATGraphWithBOOST(mat, inputPoly, 1000.0);
 #else
 		buildMATGraphWithCGAL(mat, inputPoly);
 #endif
@@ -570,7 +570,7 @@ int main(int argc, char **argv) {
 		}
 
 #ifndef FILL_NO_CAIRO
-		if( gReallyReallyDoSample || output || ( ! noPDFArg.getValue()) ) {
+		if( gReallyReallyDoSample || output || (!noPDFArg.getValue() && gDrawPrintPaths) ) {
 #else
 		{
 #endif
