@@ -271,9 +271,9 @@ int main(int argc, char **argv) {
 		outFileName = gInputFile + ".pdf";
 	}
 
-	bool output = gOutputFile != "";
+	bool yesDoWriteRobbinFile = gOutputFile != "";
 	ofstream out;
-	if( output ) {
+	if( yesDoWriteRobbinFile ) {
 		if( gVerbose ) cerr << "Output ribbons to " << gOutputFile << endl;
 		out = ofstream(gOutputFile.c_str());
 		out << std::fixed << std::setprecision(7);
@@ -285,7 +285,8 @@ int main(int argc, char **argv) {
 	double minToolRadius = gMinOffset / 2.0;
 	double maxToolRadius = gMaxOffset / 2.0;
 	if( gVerbose ) cerr << "Tool radius ∈ [" << minToolRadius << ", " << maxToolRadius << ']';
-	if( gVerbose ) cerr << ". Bounding box = " << bbox.min_ << " -> " << bbox.max_;
+	if( gVerbose ) cerr << ". Bounding box X-range = [" << bbox.min_.x() << ", " <<
+            bbox.max_.x() << "], Y-range = [" << bbox.min_.y() << ", " << bbox.max_.y() << ']';
 	if( gVerbose ) cerr << " (" << bbox.size().x() << " x " << bbox.size().y() << " mm).\n";
 	if( gVerbose ) cerr << "(Loose) sampling period set to " << Sampling::len_threshold << " mm." << endl;
 
@@ -570,12 +571,11 @@ int main(int argc, char **argv) {
 		}
 
 #ifndef FILL_NO_CAIRO
-		if( gReallyReallyDoSample || output || (!noPDFArg.getValue() && gDrawPrintPaths) ) {
+		if( gReallyReallyDoSample || yesDoWriteRobbinFile || (!noPDFArg.getValue() && gDrawPrintPaths) ) {
 #else
 		{
 #endif
 			// If required, we now sample the print paths.
-			pts.clear();
 			for( Component & comp : components ) {
 				vwc.samplePrintPath(comp, & maoi[1], pts);
 			}
@@ -600,49 +600,52 @@ int main(int argc, char **argv) {
 		// tolerance of ≈ 1 %.
 		for( const auto & samples : pts ) {
 			nbSamples += samples.size();
-			if( (gReallyReallyDoSample || output) && ! samples.empty() ) {
+			if( samples.empty() ) { continue; }
+			if( yesDoWriteRobbinFile ) {
 				out << "closed " << samples.size() << " " << (stepNum-1) << endl;
-				Vec2d q = samples.back().pos;
-				for( const auto & p : samples ) {
-					if( p.radius > maxToolRadius * 1.01 )
-						cerr << "ERROR : output extrusion radius is too large: "
-							<< p.radius << " >> " << maxToolRadius << " at " << p.pos << endl;
-					if( p.radius < minToolRadius / 1.01 )
-						cerr << "ERROR : output extrusion radius is too small: "
-							<< p.radius << " << " << minToolRadius << " at " << p.pos << endl;
+			}
+			Vec2d q = samples.back().pos;
+			for( const auto & p : samples ) {
+				if( p.radius > maxToolRadius * 1.01 )
+					cerr << "ERROR : output extrusion radius is too large: "
+						<< p.radius << " >> " << maxToolRadius << " at " << p.pos << endl;
+				if( p.radius < minToolRadius / 1.01 )
+					cerr << "ERROR : output extrusion radius is too small: "
+						<< p.radius << " << " << minToolRadius << " at " << p.pos << endl;
+				if( yesDoWriteRobbinFile ) {
 					out << p.pos.x() << ' ' << p.pos.y()
 						<< ' ' << p.radius
 						<< ' ' << p.tangent.x() << ' ' << p.tangent.y()
 						<< endl;
-					totalLength += (q-p.pos).length();
-					q = p.pos;
 				}
-#if 0
-				// Check angle formed by 3 consecutive samples. (That code was
-				// there to detect and fix a bug.) Might still be useful in the
-				// future.)
-				const int N = samples.size();
-				for( int i1 = 0; i1 < N; ++i1 ) {
-					int i0 = (i1+N-1)%N;
-					int i2 = (i1+1)%N;
-					const Vec2d & p0 = samples[i0].pos;
-					const Vec2d & p1 = samples[i1].pos;
-					const Vec2d & p2 = samples[i2].pos;
-					const Vec2d a = p1 - p0;
-					const Vec2d b = p2 - p1;
-					const double dx = a.dot(b);
-					const double dy = det(a,b);
-					double angle = std::abs(atan2(dy, dx));
-					if( angle > 1.1*3.14159/2.0 ) {
-						cout << setprecision(10) << std::fixed <<
-						"VERY BIG ANGLE " << angle << ' '<< dx << ' '<<dy<< " FOUND IN " << gOutputFile << " at pos " << p1 << std::endl
-							<< i0 << ": " << p0 << endl
-							<< i1 << ": " << p1 << endl
-							<< i2 << ": " << p2 << endl;
-					}
-				}
-#endif
+				totalLength += (q-p.pos).length();
+				q = p.pos;
 			}
+#if 0
+			// Check angle formed by 3 consecutive samples. (That code was
+			// there to detect and fix a bug.) Might still be useful in the
+			// future.)
+			const int N = samples.size();
+			for( int i1 = 0; i1 < N; ++i1 ) {
+				int i0 = (i1+N-1)%N;
+				int i2 = (i1+1)%N;
+				const Vec2d & p0 = samples[i0].pos;
+				const Vec2d & p1 = samples[i1].pos;
+				const Vec2d & p2 = samples[i2].pos;
+				const Vec2d a = p1 - p0;
+				const Vec2d b = p2 - p1;
+				const double dx = a.dot(b);
+				const double dy = det(a,b);
+				double angle = std::abs(atan2(dy, dx));
+				if( angle > 1.1*3.14159/2.0 ) {
+					cout << setprecision(10) << std::fixed <<
+						"VERY BIG ANGLE " << angle << ' '<< dx << ' '<<dy<< " FOUND IN " << gOutputFile << " at pos " << p1 << std::endl
+						<< i0 << ": " << p0 << endl
+						<< i1 << ": " << p1 << endl
+						<< i2 << ": " << p2 << endl;
+				}
+			}
+#endif
 		}
 
 #ifndef FILL_NO_CAIRO
@@ -661,7 +664,7 @@ int main(int argc, char **argv) {
 
 	if( gVerbose ) cerr << endl << nbSamples << " samples.\n";
 
-	if( output ) {
+	if( yesDoWriteRobbinFile ) {
 		out.close();
 	}
 

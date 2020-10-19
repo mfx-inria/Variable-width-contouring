@@ -4,6 +4,8 @@
 
 using namespace std;
 
+static bool debug = false;
+
 Sample
 getFirstSample(BoundaryCircles * maoi, const ConstEdgeIterator edge, const double minToolRadius) {
 
@@ -99,8 +101,7 @@ sampleEdge(BoundaryCircles * maoi,
 	// |from| and |to| are vertices of the medial axis
 
 	if( edge->site().is_point() ) { // We are sampling a ToTheLeft circular arc
-		Sampling::sampleCircularArc(from-bot.center(), to-bot.center(), bot, out, true/*clockwise*/,
-				project, radiusOffset);
+		Sampling::sampleCircularArc(from-bot.center(), to-bot.center(), bot, out, true/*clockwise*/, project, radiusOffset);
 		return;
 	}
 	// From now on, we are sampling a straight edge

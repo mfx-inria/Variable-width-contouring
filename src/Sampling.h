@@ -129,33 +129,25 @@ public:
 #define FILL_SUBDIV_LIMIT 1000
 #ifdef FILL_SUBDIV_LIMIT
 		int N(0);
-		bool last_split_was_half = false;
 		while( (N < FILL_SUBDIV_LIMIT) && it1 != sampling.end() ) {
 			++N;
 #else
 		while( it1 != sampling.end() ) {
 #endif
-			//cerr << "sampling circular arc: [" <<N<<"] it0->v = " << it0->v << ", it1->v = " << it1->v;
 			if( is_good_sample(it0->projected, it1->projected) ) {
-				//cerr << " --> good\n";
 				out(it1->projected);
 				it0 = it1++;
-				last_split_was_half = false;
 			} else { // splitting
-				if( (!last_split_was_half) && (it1 != last) && ((it0->v | it1->v) > 0.0) ) {
-					//cerr << " --> splitThree (dot product is " << (it0->v|it1->v) << ")\n";
+				auto it2 = it1; ++it2;
+				if( (it1 != last) && ((it0->v | it2->v) > 0.0) && (det(it0->v,it2->v) > 0.0) ) {
 					it1 = sampling.erase(it1);
 					Vec2d d = it1->v - it0->v;
 					double k = 2.0/3.0;
 					it1 = sampling.insert(it1, makeVP(it0->v + (k * d)));
 					k = 1.0/3.0;
 					it1 = sampling.insert(it1, makeVP(it0->v + (k * d)));
-					last_split_was_half = false;
 				} else { // split in 2
-					//cerr << " --> splitHalf\n";
-					double k = 1.0/2.0;
 					it1 = sampling.insert(it1, makeVP(splitArcInHalf(it0->v, it1->v, clockwise)));
-					last_split_was_half = true;
 				}
 			}
 		}

@@ -165,7 +165,7 @@ void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths, const double m
 	};
 
     // Go
-    for( const auto & path : paths ) {
+	for( const auto & path : paths ) {
         const size_t N = path.size();
 		if( N < 3 ) continue;
 		// We always insert loops.
@@ -177,6 +177,9 @@ void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths, const double m
             p0 = p1;
         }
     }
+
+	if( segments.empty() ) return;
+
     VD vd;
     construct_voronoi(segments.begin(), segments.end(), &vd);
     //cerr << "BOOST Voronoi built over " << segments.size() << " input segments\n";
