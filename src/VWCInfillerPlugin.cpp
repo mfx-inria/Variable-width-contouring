@@ -204,7 +204,7 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
     MATGraph mat;
 #if 1
     CLPaths input = surface;
-    bool debug = slice_id == 22222;
+    bool debug = false;//slice_id == 3623333;
     if( debug ) {
         cerr << "SLICE " << slice_id << ", input paths:\n";
         printPaths(surface);

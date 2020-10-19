@@ -179,8 +179,13 @@ void readPolygons(istream & in, Paths & polys, BBox & bbox) {
 	if( gMinOffset <= 0.0 ) gMinOffset = minO;
 	if( gMaxOffset <= 0.0 ) gMaxOffset = maxO;
 	while(in) {
-		size_t numV;
+		int numV;
 		in >> numV;
+		bool skip = false;
+		if( numV <= 0 ) {
+			skip = true;
+			numV = -numV;
+		}
 		if( ! in ) break;
 		polys.emplace_back();
 		auto & path = polys.back();
@@ -188,6 +193,7 @@ void readPolygons(istream & in, Paths & polys, BBox & bbox) {
 		for( size_t v(0); v < numV; ++v ) {
 			double x, y;
 			in >> x >> y;
+			if( skip ) continue;
 			x *= gScale;
 			y *= gScale;
 			temp.emplace_back(x, y);
