@@ -125,6 +125,7 @@ CollapsedAxis::
 operator()(const Sample & sample) {
 	bool bad(false), nothingYet(true);
 	Sample best;
+	//best.tangent = Vec2d(0,1);
 	AxisPos bestAP;
 	auto update = [&]( const Sample & candidate, AxisPos axisPos) {
 		if( bad ) {

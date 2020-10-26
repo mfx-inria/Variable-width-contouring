@@ -70,15 +70,14 @@ moveTowardBisectorWithSegment(const Sample & sample, double delta, const Vec2d &
 	Vec2d V = segment_tangent;
 	V.rotateCW();
 	Vec2d PO = sample.pos - P;
-	double t = ((PO | V) - delta) / (1.0 - (U | V));
-	/*if( debug ) {
-		cerr << "t=" << t << ", P(" << P << "), Q(" << Q << "), U(" << U << "), V(" << V << "), delta=" << delta
-			<< " sample.pos(" << sample.pos << "), ";
-	}*/
-	if( (t < 0.0 ) || (( PO | V ) < 0.0) || ((U | V) > 0.99999) ) {
-		bad = true;
-		return {P, P, 0}; // dummy values
+	const double denom = std::max(0.0, 1.0 - (U | V));
+	double t;
+	bool bad_seg = denom < 1e-6;
+	if( ! bad_seg ) {
+		t = ((PO | V) - delta) / denom;
+		bad_seg = t < -1e-6;
 	}
+	if( bad_seg ) t = 0.0;
 	bad = false;
 	Vec2d bisector_pos = sample.pos + (t*U);
 	double val = ( bisector_pos - P ) | segment_tangent;
@@ -87,6 +86,9 @@ moveTowardBisectorWithSegment(const Sample & sample, double delta, const Vec2d &
 	} else if( val > (Q - P).length() ) {
 		Disk disk(Q, 0.0);
 		return moveTowardBisectorWithDisk(sample, delta, Disk(Q, 0), & bad);
+	} else if( bad_seg ) {
+		bad = true;
+		return {P, P, 0}; // dummy values
 	}
 	Vec2d bisector_tangent = (sample.tangent + segment_tangent).normalized();
 	assert(bisector_pos.eval(Utils::is_finite));

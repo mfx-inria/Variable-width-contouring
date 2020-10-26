@@ -94,6 +94,7 @@ public:
 				out(it1->projected);
 				it0 = it1++;
 			} else { // splitting
+				// FIXME: THIS TEST is buggy. See sampleCircularArc() below for a better test.
 				if( (it1 != last) && ((it0->v | it1->v) > 0.0) ) {
 					it1 = sampling.erase(it1);
 					Vec2d d = it1->v - it0->v;
@@ -126,7 +127,7 @@ public:
 		sampling.push_back(makeVP(v1));
 		typename list<VP>::iterator it1 = sampling.begin(), it0 = it1++, last;
 		last = --sampling.end();
-#define FILL_SUBDIV_LIMIT 1000
+#define FILL_SUBDIV_LIMIT 2000
 #ifdef FILL_SUBDIV_LIMIT
 		int N(0);
 		while( (N < FILL_SUBDIV_LIMIT) && it1 != sampling.end() ) {
