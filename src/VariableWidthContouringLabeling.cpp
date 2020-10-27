@@ -886,6 +886,12 @@ collapse(vector<Disk> & cheekPrecursors, bool sharpCut) {
 			} else if( maxRadiusPos >= 0.0 ) {
 				if( maxRadiusPos > 0.0 ) {
 					graph.insert(nullptr, edge, maxRadiusDisk);
+				} else {
+					// from() has radius very close to maxCollapseRadius() and
+					// to() has radius >= maxCollapseRadius() + 1e-4,
+					// So we revert from() to Normal label and stop here.
+					edge->from()->labelAsNormal();
+					continue;
 				}
 			} else {
 				markCollapsedAndPropagate(edge);
