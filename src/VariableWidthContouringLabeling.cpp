@@ -796,7 +796,9 @@ collapse(vector<Disk> & cheekPrecursors, bool sharpCut) {
 		vert->collapse();
 		hadSomeCollapse = true;
 
-		//bool debug = vert->pos().x() < 30.0;
+		//double x = vert->pos().x();
+		//double y = vert->pos().y();
+		const bool debug = false;//(x>53)&&(x<60);//&&(y>59)&&(y<60);
 
 		if( debug ) cerr << "[Collapse] Initiated at " << vert->pos() << endl;
 
@@ -819,8 +821,8 @@ collapse(vector<Disk> & cheekPrecursors, bool sharpCut) {
 			// End of fixme.
 
 			if (debug ) {
-				cerr << "At " << edge->from()->pos() << "(r=" << edge->from()->radius() << ". ";
-				cerr << "Checking neighbor at " << edge->to()->pos() << "(r=" << edge->to()->radius() << "): ";
+				cerr << "At " << edge->from()->pos() << " (r=" << edge->from()->radius() << "). ";
+				cerr << "Checking neighbor at " << edge->to()->pos() << " (r=" << edge->to()->radius() << "): ";
 			}
 
 			double r0 = edge->from()->radius();
@@ -837,7 +839,7 @@ collapse(vector<Disk> & cheekPrecursors, bool sharpCut) {
 				Disk disk;
 				if( findPointAtDistance(*edge, minCollapseRadius(), disk) > 0.0 ) {
 					if( debug ) {
-						cerr << "Found cut point at " << disk.center_ << "(r=" << disk.radius_ << endl;
+						cerr << "Found cut point at " << disk.center_ << "(r=" << disk.radius_ << ')' << endl;
 					}
 					graph.insert(nullptr, edge, disk);
 					to_add_in_component.push_back(edge->to());
@@ -855,20 +857,32 @@ collapse(vector<Disk> & cheekPrecursors, bool sharpCut) {
 				}
 			}
 			if( sharpCut ) continue;
-			// Here, edge->from()->radius() >= minCollapseRadius()
+			// Here:
+			// 		edge->from()->radius() > minCollapseRadius() - 1e-4
+			// and	edge->to()->radius() >= minCollapseRadius() + 1e-4
 			double goodGradientPos = -1; Disk goodGradientDisk;
 			double maxRadiusPos; Disk maxRadiusDisk;
 			double gradient = edge->getRadiusGradientAtStart();
-			//cerr << "Gradient at " << edge->from()->pos() << " is " << gradient << ", goodGrad is " << goodGradient << endl;
+			if( debug ) {
+				cerr << "Gradient at " << edge->from()->pos() << " is " << gradient << ", goodGrad is " << goodGradient << endl;
+			}
 			if( gradient >= goodGradient ) {
 				double rad = minToolRadius_*(2.0+1.0/gradient);
 				if( EdgeType::EdgeEdge == edge->type ) rad *= 1.05;
-				//cerr << "Radius at " << edge->from()->pos() << " is " << edge->from()->radius() << ", goodRadius is " << rad << endl;
+				if( debug ) {
+					cerr << "We have a big-enough gradient. Radius at " << edge->from()->pos() << " is " << edge->from()->radius() << " and goodRadius is " << rad << endl;
+				}
 				if( edge->from()->radius() >= rad ) {
+					if( debug ) {
+						cerr << "\"From\" is large enough, reverted to Normal label\n";
+					}
 					// edge->from() is all good. Revert it back to normal
 					edge->from()->labelAsNormal();
 					continue;
 				} else {
+					if( debug ) {
+						cerr << "Finding good gradient...\n";
+					}
 					goodGradientPos = findPointAtDistance(*edge, rad, goodGradientDisk);
 				}
 			}
@@ -876,15 +890,21 @@ collapse(vector<Disk> & cheekPrecursors, bool sharpCut) {
 			fromIsVerySmall = r0 <= maxCollapseRadius() - 1e-4;
 			toIsSmall = r1 < maxCollapseRadius() + 1e-4;
 			if( fromIsVerySmall || toIsSmall ) {
+				if( debug ) { cerr << "~A~"; }
 				maxRadiusPos = findPointAtDistance(*edge, maxCollapseRadius(), maxRadiusDisk);
 			} else {
+				if( debug ) { cerr << "~B~"; }
 				maxRadiusPos = 0;
 			}
 			if( (goodGradientPos >= 0) && ( (maxRadiusPos < 0) || (goodGradientPos < maxRadiusPos) ) ) {
-				//cerr << "Good gradient at " << edge->from()->pos() << endl;
+				if( debug ) {
+					cerr << "Good gradient further from " << edge->from()->pos() << endl;
+				}
 				graph.insert(nullptr, edge, goodGradientDisk);
 			} else if( maxRadiusPos >= 0.0 ) {
+				if( debug ) { cerr << "~C~"; }
 				if( maxRadiusPos > 0.0 ) {
+					if( debug ) { cerr << "~MAX RAD REACHED~"; }
 					graph.insert(nullptr, edge, maxRadiusDisk);
 				} else {
 					// from() has radius very close to maxCollapseRadius() and
@@ -894,6 +914,7 @@ collapse(vector<Disk> & cheekPrecursors, bool sharpCut) {
 					continue;
 				}
 			} else {
+				if( debug ) { cerr << "markCollapsedAndProp.....\n"; }
 				markCollapsedAndPropagate(edge);
 				continue;
 			}
