@@ -204,10 +204,10 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
     MATGraph mat;
 #if 1
     CLPaths input = surface;
-    bool debug = false;//slice_id == 3623333;
+    bool debug = slice_id == 54;
     if( debug ) {
         cerr << "SLICE " << slice_id << ", input paths:\n";
-        printPaths(surface);
+        //printPaths(surface);
     }
     ClipperLib::CleanPolygons(input);
     if( debug ) {
@@ -367,6 +367,8 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
                 for( int i = 0; i < beadWidth.size(); ++i ) {
                     fills.back()->setPerVertexAttributeValue(flow_idx, i, beadWidth[i]);
                 }
+                int cst_flow_idx = fills.back()->addPathAttribute("flow_multiplier");
+                fills.back()->setPathAttributeValue(cst_flow_idx, minBeadWidth_ / nozzle_diameter_);
             }
             clipperPath.clear();
             beadWidth.clear();
