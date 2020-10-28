@@ -204,7 +204,7 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
     MATGraph mat;
 #if 1
     CLPaths input = surface;
-    bool debug = slice_id == 54;
+    bool debug = false;//slice_id == 54;
     if( debug ) {
         cerr << "SLICE " << slice_id << ", input paths:\n";
         //printPaths(surface);
@@ -348,10 +348,10 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
             Vec2d q = samples.back().pos;
             for( const auto & p : samples ) {
                 if( p.radius > maxToolRadius * 1.01 )
-                    cerr << "ERROR at slice " << slice_id << " step " << step << ": output extrusion radius is too large: "
+                    cerr << "[Variable-width contouring] ERROR at slice " << slice_id << " step " << step << ": output extrusion radius is too large: "
                         << p.radius << " >> " << maxToolRadius << " at " << p.pos << endl;
                 if( p.radius < minToolRadius / 1.01 )
-                    cerr << "ERROR at slice " << slice_id << " step " << step << " : output extrusion radius is too small: "
+                    cerr << "[Variable-width contouring] ERROR at slice " << slice_id << " step " << step << " : output extrusion radius is too small: "
                         << p.radius << " << " << minToolRadius << " at " << p.pos << endl;
                 //outpath << p.pos.x() << ' ' << p.pos.y() << ' ' << p.radius << ' ' << p.tangent.x() << ' ' << p.tangent.y() << endl;
                 totalLength += (q-p.pos).length();

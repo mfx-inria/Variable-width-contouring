@@ -110,9 +110,11 @@ computeBoundaryCircles(SmoothPath & sp, Samples::const_iterator it, Samples::con
 					}
 				} else {
 					const SubAxis & curAxis = subAxes[prevAP.axis()];
+#if ICESL_PLUGIN==0
 					cerr << "[Variable-width contouring] Changing axis! from " << prevAP << " to " << ap << " (at "
 						<< curAxis.clippingVertex->pos() <<  " --> "
 						<< axis.clippingVertex->pos() <<  ")" << endl;
+#endif
 				}
 			}
 		}
@@ -880,7 +882,8 @@ void
 MATGraph::
 debugCheck() const
 {
-#ifndef NDEBUG
+#if 0
+//#ifndef NDEBUG
 	for ( const MATvert & vert : verts ) {
 		MATvert * v = const_cast<MATvert *>(&vert);
 		for( EdgeIterator e = v->edges_.begin(); e != v->edges_.end(); ++e ) {

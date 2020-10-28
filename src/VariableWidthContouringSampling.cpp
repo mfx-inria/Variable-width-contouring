@@ -343,7 +343,13 @@ samplePrintPath(Component & component, BoundaryCircles * outerMaoi, vector<vecto
 						constantOffsetForCurrentEdge, minToolRadius_);
 				visited.insert(&(*edge));
 				edge = edge->next(/*walk_on_fire*/true);
+#if ICESL_PLUGIN==0
+				// jump skips some segments fo the colapsed axis that we're sure
+				// can't be closest from now on, but it's risky because
+				// moveTowardBisectorWithSegment is fragile and may have us
+				// jump too far, thereby missing parts of the collapsed axis.
 				collapsedAxis.jump();
+#endif
 			}
 			if( Collapse == projectionType  ) {
 				bool addClip = startEdge->from()->is_normal() && degree(startEdge->from()) > 0;

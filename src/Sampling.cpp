@@ -69,11 +69,13 @@ moveTowardBisectorWithSegment(const Sample & sample, const Vec2d & P, const Vec2
 	Vec2d V = segment_tangent;
 	V.rotateCW();
 	Vec2d PO = sample.pos - P;
+	const double numerator = PO | V;
+	if( numerator < 0.0 ) { bad = true; return {P, P, 0}; }
 	const double denom = std::max(0.0, 1.0 - (U | V));
 	double t;
 	bool bad_seg = denom < 1e-6;
 	if( ! bad_seg ) {
-		t = (PO | V) / denom;
+		t = numerator / denom;
 		bad_seg = t < -1e-6;
 	}
 	if( bad_seg ) t = 0.0;
