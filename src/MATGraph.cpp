@@ -155,7 +155,7 @@ operator()(const Sample & sample) {
 		const vector<Vec2d> & points = subAxis.points;
 		const int end = points.size() - 1;
 		for( ; ap.pos() < end; ++ap.pos() ) {
-			update(Sampling::moveTowardBisectorWithSegment(sample, 0, points[ap.pos()], points[ap.pos()+1], bad), ap);
+			update(Sampling::moveTowardBisectorWithSegment(sample, points[ap.pos()], points[ap.pos()+1], bad), ap);
 		}
 	}
 	best.axisPos = bestAP;

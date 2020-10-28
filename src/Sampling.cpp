@@ -60,10 +60,9 @@ is_good_sample(const Sample & s0, const Sample & s1) {
 
 Sample
 Sampling::
-moveTowardBisectorWithSegment(const Sample & sample, double delta, const Vec2d & P, const Vec2d & Q, bool & bad) {
+moveTowardBisectorWithSegment(const Sample & sample, const Vec2d & P, const Vec2d & Q, bool & bad) {
 	assert(sample.pos.eval(Utils::is_finite));
 	assert(std::isfinite(sample.radius));
-	assert(std::isfinite(delta));
 	Vec2d U = sample.tangent;
 	U.rotateCCW();
 	Vec2d segment_tangent = (Q - P).normalized();
@@ -74,7 +73,7 @@ moveTowardBisectorWithSegment(const Sample & sample, double delta, const Vec2d &
 	double t;
 	bool bad_seg = denom < 1e-6;
 	if( ! bad_seg ) {
-		t = ((PO | V) - delta) / denom;
+		t = (PO | V) / denom;
 		bad_seg = t < -1e-6;
 	}
 	if( bad_seg ) t = 0.0;
@@ -82,10 +81,10 @@ moveTowardBisectorWithSegment(const Sample & sample, double delta, const Vec2d &
 	Vec2d bisector_pos = sample.pos + (t*U);
 	double val = ( bisector_pos - P ) | segment_tangent;
 	if( val < 0.0 ) { // maximal disk is not tangent in interior point of PQ
-		return moveTowardBisectorWithDisk(sample, delta, Disk(P, 0), & bad);
+		return moveTowardBisectorWithDisk(sample, 0, Disk(P, 0), & bad);
 	} else if( val > (Q - P).length() ) {
 		Disk disk(Q, 0.0);
-		return moveTowardBisectorWithDisk(sample, delta, Disk(Q, 0), & bad);
+		return moveTowardBisectorWithDisk(sample, 0, Disk(Q, 0), & bad);
 	} else if( bad_seg ) {
 		bad = true;
 		return {P, P, 0}; // dummy values
@@ -93,7 +92,7 @@ moveTowardBisectorWithSegment(const Sample & sample, double delta, const Vec2d &
 	Vec2d bisector_tangent = (sample.tangent + segment_tangent).normalized();
 	assert(bisector_pos.eval(Utils::is_finite));
 	assert(bisector_tangent.eval(Utils::is_finite));
-	Sample s = {bisector_pos, bisector_tangent, delta + distance(sample.pos, bisector_pos)};
+	Sample s = {bisector_pos, bisector_tangent, distance(sample.pos, bisector_pos)};
 	return s;
 }
 

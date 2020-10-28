@@ -59,7 +59,7 @@ public:
 
 	static Sample moveTowardBisectorWithDisk(const Sample & sample, double delta, const Disk & disk,
 			bool * bad = nullptr);
-	static Sample moveTowardBisectorWithSegment(const Sample & sample, double delta, const Vec2d &
+	static Sample moveTowardBisectorWithSegment(const Sample & sample, const Vec2d &
 			s0, const Vec2d & s1, bool & bad);
 	static bool is_good_sample(const Sample & s0, const Sample & s1);
 	static Vec2d splitArcInHalf(const Vec2d & v0, const Vec2d & v1, bool clockwise);
