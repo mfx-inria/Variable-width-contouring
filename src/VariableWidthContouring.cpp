@@ -7,8 +7,6 @@
 #include <map>
 #include <stack>
 
-#include <CGAL/squared_distance_2.h>
-
 using namespace std;
 
 BBox
