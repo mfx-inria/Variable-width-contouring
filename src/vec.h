@@ -11,8 +11,15 @@
 #include <cassert>
 #include <vector>
 #include <cmath>
+#ifdef WIN32
+#include <xmmintrin.h>
+#include <mmintrin.h>
+#include <immintrin.h>
+#else
 #include <x86intrin.h>
+#endif
 #include <functional> // std::function
+#include <algorithm>
 
 /*
  *
@@ -66,7 +73,7 @@ struct Vec2
     inline Self operator-=(const Self & rhs) { *this = *this - rhs; return *this; }
     inline Self operator*=(const NT & rhs) { *this = *this * rhs; return *this; }
     inline Self operator/=(const NT & rhs) { *this = *this / rhs; return *this; }
-	inline Self & operator=(const Self & other) { x() = other.x(); y() = other.y(); return *this; }
+	  inline Self & operator=(const Self & other) { x() = other.x(); y() = other.y(); return *this; }
 
     inline Self operator-() const { return Self(-x(), -y()); }
 

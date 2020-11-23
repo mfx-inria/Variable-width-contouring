@@ -101,9 +101,25 @@ struct Target {
 	};
 
 	Target(const Disk & d) : medialAxisDisk(d), radius(0.0),
-	vertexSource(nullptr), isClipping(false) {}
+    vertexSource(nullptr), isClipping(false) {}
 	Target(const Disk & d, double tr) : medialAxisDisk(d), radius(tr),
-	vertexSource(nullptr), isClipping(false) {}
+    vertexSource(nullptr), isClipping(false) {}
+  Target(const Target& t) : medialAxisDisk(t.medialAxisDisk), radius(t.radius),
+    isClipping(t.isClipping), clipDirection(t.clipDirection),
+    vertexSource(t.vertexSource), edgeSource(t.edgeSource) {}
+  Target& operator =(const Target& t)
+  {
+    if (this != &t) {
+      medialAxisDisk = t.medialAxisDisk;
+      radius = t.radius;
+      isClipping = t.isClipping;
+      clipDirection = t.clipDirection;
+      vertexSource = t.vertexSource;
+      edgeSource = t.edgeSource;
+    }
+    return *this;
+  }
+  ~Target() {}
 };
 
 class MATedge
@@ -213,8 +229,6 @@ inline bool operator<(const MATvert & lhs, const MATvert & rhs) {
 	return lhs.circumcircle.center_.x() < rhs.circumcircle.center_.x() ||
            ( lhs.circumcircle.center_.x() == rhs.circumcircle.center_.x() && lhs.circumcircle.center_.y() < rhs.circumcircle.center_.y() );
 }
-
-class BoundaryCircles;
 
 class MATGraph
 {

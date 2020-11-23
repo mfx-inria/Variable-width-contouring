@@ -23,7 +23,7 @@ using CLPaths = ClipperLib::Paths;
 struct Segment {
     Vec2i p0;
     Vec2i p1;
-    Segment(const CLPoint & v0, const CLPoint & v1) : p0(v0.X, v0.Y), p1(v1.X, v1.Y) {}
+    Segment(const CLPoint & v0, const CLPoint & v1) : p0(static_cast<int>(v0.X), static_cast<int>(v0.Y)), p1(static_cast<int>(v1.X), static_cast<int>(v1.Y)) {}
 };
 
 namespace boost {

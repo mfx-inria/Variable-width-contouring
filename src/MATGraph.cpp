@@ -2,6 +2,7 @@
 
 #include "MATGraph.h"
 
+#include <string>
 #include <iterator> // for std::distance
 #include <algorithm> // rotate
 #include <stack>
@@ -66,11 +67,11 @@ computeBoundaryCircles(SmoothPath & sp, Samples::const_iterator it, Samples::con
 	++it;
 	for( ; it != end; ++it ) {
 		AxisPos ap = it->axisPos;
-		if( ap.axis() >= subAxes.size() ) {
+		if( ap.axis() >= static_cast<int>(subAxes.size()) ) {
 			cerr << "Bad axis " << ap.axis() << " instead of <" << subAxes.size() << endl;
 		}
 		const SubAxis & axis = subAxes[ap.axis()];
-		if( (ap.pos() >= 0) && (ap.pos() >= axis.points.size()) ) {
+		if( (ap.pos() >= 0) && (ap.pos() >= static_cast<int>(axis.points.size())) ) {
 			cerr << "Bad pos " << ap.pos() << " instead of <" << axis.points.size() << endl;
 		}
 		AxisPos prevAP = prevIt->axisPos;
@@ -142,7 +143,7 @@ operator()(const Sample & sample) {
 		}
 		nothingYet = false;
 	};
-	for( int ax(curAP.axis()); ax < subAxes.size(); ++ax ) {
+	for( int ax(curAP.axis()); ax < static_cast<int>(subAxes.size()); ++ax ) {
 		const SubAxis & subAxis = subAxes[ax];
 		AxisPos ap;
 		ap.axis() = ax;
@@ -175,7 +176,7 @@ print() const {
 			cerr << "No clipping disk, ";
 		}
 		cerr << sub.points.size() << " points: (";
-		for( int i(0); i < sub.points.size(); ++i ) {
+		for( int i(0); i < static_cast<int>(sub.points.size()); ++i ) {
 			cerr << i << ':' << sub.points[i] << ") (";
 		}
 	}

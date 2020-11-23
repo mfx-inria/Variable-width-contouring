@@ -3,7 +3,8 @@
 #include "VariableWidthContouring.h"
 //#include "chronograph.h"
 
-#include <cairo/cairo-pdf.h>
+//#include <cairo/cairo-pdf.h>
+#include <algorithm>
 #include <map>
 #include <stack>
 
@@ -194,7 +195,7 @@ findPointAtDistance(const MATedge& edge, double dist, Disk & disk) const
 					<< endl;
 			}
 			assert( ! bad );
-			double x = std::sqrt(max(0.0,requiredRadius * requiredRadius - a_mid_length_2));
+			double x = std::sqrt(std::max(0.0,requiredRadius * requiredRadius - a_mid_length_2));
 			Vec2d x_dir = s12.normalized().rotatedCCW();
 			double lo(x_dir.dot(a-s1)), hi(x_dir.dot(b-s1));
 			if( lo > hi ) std::swap(lo, hi);
@@ -323,7 +324,7 @@ statusDegree(const MATvert * vert, MatStatus status, EdgeIterator & freeway) con
 MATvert * closest(const Vec2d & query, const std::vector<MATvert *> & pts) {
 	double dist = (pts[0]->pos()-query).squaredLength();
 	MATvert * best = pts[0];
-	for( int i(1); i < pts.size(); ++i ) {
+	for( int i(1); i < static_cast<int>(pts.size()); ++i ) {
 		double d = (pts[i]->pos()-query).squaredLength();
 		if( d < dist ) {
 			best = pts[i];

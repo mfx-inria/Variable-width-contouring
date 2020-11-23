@@ -5,8 +5,16 @@
 #include <cmath>
 #include <stack>
 #include <iostream>
+#include <algorithm>
 
 using namespace std;
+
+#ifdef WIN32
+double drand48()
+{
+  return static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+}
+#endif
 
 bool
 RadialCompare::

@@ -5,6 +5,7 @@
 #include <set>
 #include <stack>
 #include <unordered_set>
+#include <algorithm>
 
 using namespace std;
 
@@ -82,7 +83,7 @@ simplifyMACombinatorics(Components * components) {
 			if( out1->site() != out0->twin()->site() ) goto nextVert;
 
 			bool clipping(false);
-			for( int j(0); j < vert->targets_.size(); ++j ) {
+			for( int j(0); j < static_cast<int>(vert->targets_.size()); ++j ) {
 				Target & target = vert->targets_[j];
 				if( target.isClipping ) {
 					clipping = true;
@@ -127,7 +128,7 @@ makeProjectorOnMA(const MATedge & arc) const {
 	MATvert * vert = arc.from();
 
 	MATvert * neighbor = arc.to();
-	MATvert * clearedTarget;
+	//MATvert * clearedTarget;
 
 	if( arc.type == EdgeType::VertVert ) { // point/point bisector : closed form solution is too complex, should use dichotomic search.
 		Vec2d bot = arc.site().point();
@@ -244,7 +245,7 @@ trimArcToTargetForCollapse(const MATedge & arc, const Targets & targets, Disk & 
 		double y = distanceToBoundary(arc, vert->circumcircle.center_);
 		double xmin = (vert->circumcircle.center_-bot) * right;
 		double xmax = (neighbor->circumcircle.center_-bot) * right;
-		for( int ti(0); ti < targets.size(); ++ti ) {
+		for( int ti(0); ti < static_cast<int>(targets.size()); ++ti ) {
 			const Target & target = targets[ti];
 			const double targetDist = 2.0 * target.radius - target.medialAxisDisk.radius_;
 			if( targetDist <= 0.0 ) continue;
@@ -279,7 +280,7 @@ trimArcToTargetForCollapse(const MATedge & arc, const Targets & targets, Disk & 
 		//if( left * dir < 0.0 ) left = - left;
 		double dirLen = dir.length();
 		dir = dir / dirLen;
-		for( int ti(0); ti < targets.size(); ++ti ) {
+		for( int ti(0); ti < static_cast<int>(targets.size()); ++ti ) {
 			const Target & target = targets[ti];
 			const double targetDist = 2.0 * target.radius - target.medialAxisDisk.radius_;
 			if( targetDist <= 0.0 ) continue;
@@ -306,7 +307,7 @@ trimArcToTargetForCollapse(const MATedge & arc, const Targets & targets, Disk & 
 		graph.makePSBisector(arc, psb); // FOR COLLAPSE
 		double h = psb.h;
 		double y = distanceToBoundary(arc, vert->circumcircle.center_);
-		for( int ti(0); ti < targets.size(); ++ti ) {
+		for( int ti(0); ti < static_cast<int>(targets.size()); ++ti ) {
 			const Target & target = targets[ti];
 			double X0 = (target.medialAxisDisk.center_ - psb.point) * psb.u;
 			double Y0 = (target.medialAxisDisk.center_ - psb.point) * psb.v + h;
@@ -391,7 +392,7 @@ trimArcToTarget(const MATedge & arc, const Targets & targets, Disk & trim, bool 
 		double y = distanceToBoundary(arc, vert->circumcircle.center_);
 		double xmin = (vert->circumcircle.center_-bot) * right;
 		double xmax = (neighbor->circumcircle.center_-bot) * right;
-		for( int ti(0); ti < targets.size(); ++ti ) {
+		for( int ti(0); ti < static_cast<int>(targets.size()); ++ti ) {
 			const Target & target = targets[ti];
 			double QX = (target.medialAxisDisk.center_ - bot) * right;
 			double QY = (target.medialAxisDisk.center_ - bot) * up - h;
@@ -445,7 +446,7 @@ trimArcToTarget(const MATedge & arc, const Targets & targets, Disk & trim, bool 
 		graph.makePSBisector(arc, psb);
 		double h = psb.h;
 		double y = distanceToBoundary(arc, vert->circumcircle.center_);
-		for( int ti(0); ti < targets.size(); ++ti ) {
+		for( int ti(0); ti < static_cast<int>(targets.size()); ++ti ) {
 			const Target & target = targets[ti];
 			double X0 = (target.medialAxisDisk.center_ - psb.point) * psb.u;
 			double Y0 = (target.medialAxisDisk.center_ - psb.point) * psb.v + h;
@@ -483,7 +484,7 @@ trimArcToTarget(const MATedge & arc, const Targets & targets, Disk & trim, bool 
 		}
 		double dirLen = dir.length();
 		dir = dir / dirLen;
-		for( int ti(0); ti < targets.size(); ++ti ) {
+		for( int ti(0); ti < static_cast<int>(targets.size()); ++ti ) {
 			const Target & target = targets[ti];
 			double X0 = (target.medialAxisDisk.center_ - trim.center_) * dir;
 			double Y0 = det(target.medialAxisDisk.center_ - trim.center_, dir);

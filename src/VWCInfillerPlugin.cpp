@@ -54,7 +54,7 @@ void VWCInfiller::terminateInfill(int brush)
 
 // -----------------------------------------------
 
-void VWCInfiller::prepareInfillForSlice(int id, const AAB<2, int>& xy_slice_box, float height, int brush)
+void VWCInfiller::prepareInfillForSlice(int id, const AAB<2, int>& xy_slice_box, float, double, int brush)
 {
     /// retrieve extruder used for the infill by this brush
     int extruder_id = 0;
@@ -182,7 +182,7 @@ void printPaths(const CLPaths & paths) {
 
 // ----------------------------------------------- 
 
-bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
+bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double layer_thickness_mm, int brush,
         const ClipperLib::Paths & surface,
         std::vector<std::unique_ptr<IceSLInterface::IPath> > & fills,
         bool & preserve_order)
@@ -364,7 +364,7 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
                 fills.back()->createPath(clipperPath, true);
                 // customize flow
                 int flow_idx = fills.back()->addPerVertexAttribute("flow_multiplier");
-                for( int i = 0; i < beadWidth.size(); ++i ) {
+                for( int i = 0; i < static_cast<int>(beadWidth.size()); ++i ) {
                     fills.back()->setPerVertexAttributeValue(flow_idx, i, beadWidth[i]);
                 }
                 int cst_flow_idx = fills.back()->addPathAttribute("flow_multiplier");
@@ -407,33 +407,8 @@ bool VWCInfiller::generateInfill(int slice_id, float slice_height_mm, int brush,
 
 // -----------------------------------------------
 
-bool VWCInfillerPlugin::addInfillerSettings(IceSLInterface::EnumerableSettingsInterface& enumerable_settings)
-{/*
-    // allocates an array with one value per brush
-    m_LineWidth_mm.resize(enumerable_settings.getNumberOfBrushes(),0.4f);
-    // generates setting per-brush for this infiller
-    for (int i = 0; i < (int)m_LineWidth_mm.size(); i++) {
-    std::unique_ptr<IceSLInterface::EnumerableSettingsInterface::SettingInterface> s = 
-    enumerable_settings.addSettingFromPlugin(
-    &m_LineWidth_mm[i],
-    &m_LineWidth_min_mm,
-    &m_LineWidth_max_mm,
-    "line_width_mm_" + std::to_string(i),
-    "Line width",
-    "Brush_" + std::to_string(i),
-    "Specifies the line width to be used during contouring. The flow is adjusted accordingly.",
-    1000, // rank to order multiple settings, lower appears before
-    [this, &enumerable_settings, i]() -> bool { // show setting only when the infiller is selected
-    std::string infiller;
-    enumerable_settings.getSettingByName("infill_type_" + std::to_string(i))->getValue(infiller);
-    return infiller == this->name();
-    }
-    );
-    if (s == nullptr) {
-    return false;
-    }
-    }
-  */
+bool VWCInfillerPlugin::addPluginSettings(IceSLInterface::EnumerableSettingsInterface& enumerable_settings)
+{
     return true;
 }
 
