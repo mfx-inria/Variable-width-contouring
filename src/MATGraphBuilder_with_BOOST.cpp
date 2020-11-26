@@ -226,7 +226,7 @@ void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths, const double m
 			do {
 				VPtr nv = start->vertex1();
 				assert( nv != nullptr );
-				int scol = nv->color();
+				int scol = static_cast<int>(nv->color());
 				if( scol / 2 == 1 ) { // already visited?
 					fl = scol % 2;
 					break;

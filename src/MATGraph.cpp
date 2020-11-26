@@ -48,7 +48,7 @@ incr(AxisPos & ap) const {
 		++ap.axis();
 		if( ap.axis() == subAxes.size() ) { // go back to starting |ap|
 			--ap.axis();
-			ap.pos() = axis.points.size() - 1;
+			ap.pos() = static_cast<int>(axis.points.size()) - 1;
 			return false;
 		}
 	}
@@ -156,7 +156,7 @@ operator()(const Sample & sample) {
 			++ap.pos();
 		}
 		const vector<Vec2d> & points = subAxis.points;
-		const int end = points.size() - 1;
+		const int end = static_cast<int>(points.size()) - 1;
 		for( ; ap.pos() < end; ++ap.pos() ) {
 			update(Sampling::moveTowardBisectorWithSegment(sample, points[ap.pos()], points[ap.pos()+1], bad), ap);
 		}

@@ -69,7 +69,7 @@ class VWCInfillerPlugin : public IceSLInterface::IInfillerPlugin
         }
         void dispose() override {}
 
-        std::string name()    const override { return "Variable-width Contouring"; }
+        std::string name()    const override { return "Variable-width contouring"; }
         std::string author()  const override { return "Samuel Hornus and Tim Kuipers"; }
         std::string comment() const override { return "See article \"Variable-width contouring for additive manufacturing\""; }
 
