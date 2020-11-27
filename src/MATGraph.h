@@ -104,9 +104,9 @@ struct Target {
     vertexSource(nullptr), isClipping(false) {}
 	Target(const Disk & d, double tr) : medialAxisDisk(d), radius(tr),
     vertexSource(nullptr), isClipping(false) {}
-  Target(const Target& t) : medialAxisDisk(t.medialAxisDisk), radius(t.radius),
+	Target(const Target& t) : medialAxisDisk(t.medialAxisDisk), radius(t.radius),
     isClipping(t.isClipping), clipDirection(t.clipDirection),
-    vertexSource(t.vertexSource), edgeSource(t.edgeSource) {}
+    vertexSource(t.vertexSource) {}
   Target& operator =(const Target& t)
   {
     if (this != &t) {
@@ -115,7 +115,6 @@ struct Target {
       isClipping = t.isClipping;
       clipDirection = t.clipDirection;
       vertexSource = t.vertexSource;
-      edgeSource = t.edgeSource;
     }
     return *this;
   }
