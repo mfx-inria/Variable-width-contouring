@@ -10,7 +10,12 @@
 #ifndef BOOST_POLYGON_VORONOI
 #define BOOST_POLYGON_VORONOI
 
-#warning "Variable-Width Contouring [fill or IceSL plugin] is being compiled with the LOCAL boost::polygon sources"
+#define LOCAL_BOOST_MESSAGE "Variable-Width Contouring [fill or IceSL plugin] is being compiled with the LOCAL boost::polygon sources"
+#ifdef WIN32
+#pragma message(LOCAL_BOOST_MESSAGE)
+#else
+#warning LOCAL_BOOST_MESSAGE
+#endif
 
 #include "isotropy.hpp"
 #include "point_concept.hpp"
