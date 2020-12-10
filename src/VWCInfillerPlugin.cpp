@@ -1,5 +1,6 @@
 #include "VWCInfillerPlugin.h"
 #include "Path.h"
+#include "PathTypeBitField.h"
 
 #include "VariableWidthContouring.h"
 
@@ -362,6 +363,7 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
             if( closePath(clipperPath, beadWidth) ) {
                 fills.push_back(std::unique_ptr<IceSLInterface::IPath>(new IceSLInterface::Path()));
                 fills.back()->createPath(clipperPath, true);
+                fills.back()->setPathType(PathType::e_Infill);
                 // customize flow
                 int flow_idx = fills.back()->addPerVertexAttribute("flow_multiplier");
                 for( int i = 0; i < static_cast<int>(beadWidth.size()); ++i ) {
