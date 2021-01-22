@@ -63,11 +63,13 @@ class VWCInfillerPlugin : public IceSLInterface::IInfillerPlugin
         bool initialize(IceSLInterface::IPluginEnvironment &env) override {
             std::cerr << "VWC Infiller plugin initializing...\n";
             IInfillerPlugin::initialize(env);
+            ImGui::SetCurrentContext(env.getImGuiContext());
             gluxInit();
             std::cerr << "VWC Infiller plugin initialized\n";
             return true;
         }
         void dispose() override {}
+        void gui(bool postService) override {}
 
         std::string name()    const override { return "Variable-width contouring"; }
         std::string author()  const override { return "Samuel Hornus and Tim Kuipers"; }
