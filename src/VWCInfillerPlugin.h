@@ -78,7 +78,7 @@ class VWCInfillerPlugin : public IceSLInterface::IInfillerPlugin
 
         bool addPluginSettings(IceSLInterface::EnumerableSettingsInterface& enumerable_settings) override;
 
-        std::unique_ptr<IInfillerInterface> createInfiller () const override
+        std::unique_ptr<IInfillerInterface> createInfiller () override
         {
             return std::unique_ptr<VWCInfiller>(new VWCInfiller());
         }
