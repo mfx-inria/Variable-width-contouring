@@ -39,6 +39,7 @@ class VWCInfiller : public IceSLInterface::IInfillerInterface
         bool verbose_ = false;
 
         // work parameters
+        int extruder_id_ = -1;
         double nozzle_diameter_ = 0.4; // mm
         double xy_mm_per_unit_ = 1.0f/4096.0f; // mm
         double minBeadWidth_ = 0.75 * nozzle_diameter_; // mm

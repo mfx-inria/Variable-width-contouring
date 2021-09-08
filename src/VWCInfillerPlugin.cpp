@@ -58,18 +58,17 @@ void VWCInfiller::terminateInfill(int brush)
 void VWCInfiller::prepareInfillForSlice(int id, const AAB<2, int>& xy_slice_box, float, double, int brush)
 {
     /// retrieve extruder used for the infill by this brush
-    int extruder_id = 0;
     {
         auto s = m_EnumerableSettings->getSettingByName("infill_extruder_" + std::to_string(brush));
         if (s == nullptr) {
             throw Fatal("This plugin is only for FDM");
         }
-        s->getValue(extruder_id);
+        s->getValue(extruder_id_);
     }
     /// retrieve extruder nozzle diameter
     float nd = 0.0f;
     {
-        auto s = m_EnumerableSettings->getSettingByName("nozzle_diameter_mm_" + std::to_string(extruder_id));
+        auto s = m_EnumerableSettings->getSettingByName("nozzle_diameter_mm_" + std::to_string(extruder_id_));
         if (s == nullptr) {
             throw Fatal("This plugin is only for FDM");
         }
@@ -364,6 +363,7 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
                 fills.push_back(std::unique_ptr<IceSLInterface::IPath>(new IceSLInterface::Path()));
                 fills.back()->createPath(clipperPath, true);
                 fills.back()->setPathType(PathType::e_Infill);
+                fills.back()->setTool(extruder_id_);
                 // customize flow
                 int flow_idx = fills.back()->addPerVertexAttribute("flow_multiplier");
                 for( int i = 0; i < static_cast<int>(beadWidth.size()); ++i ) {
