@@ -148,11 +148,13 @@ bool readCommandLine(int argc, char **argv) {
 		Sampling::len_threshold = std::max(sp, 0.005); // in mm.
 		gSimplifyThreshold = std::max(1.0, simplifyArg.getValue());
 		if( minOffsetArg.getValue() < 0.0f )
-			throw TCLAP::ArgException("bad value", "-m --min-offset");
+			throw TCLAP::ArgException("bad value. Must be non-negative", "-m --min-offset");
 		gMinOffset = minOffsetArg.getValue();
 		if( maxOffsetArg.getValue() < 0.0f )
-			throw TCLAP::ArgException("bad value", "-M --max-offset");
+			throw TCLAP::ArgException("bad value. Must be positive", "-M --max-offset");
 		gMaxOffset = maxOffsetArg.getValue();
+		if( gMaxOffset < 2.0 * gMinOffset )
+			throw TCLAP::ArgException("bad value. Must be >= 2 * min-offset", "-M --max-offset");
 		gScale = scalingArg.getValue();
 		if( gScale <= 0.0 )
 			throw TCLAP::ArgException("bad value", "-s --scaling");
@@ -277,9 +279,9 @@ int main(int argc, char **argv) {
 		outFileName = gInputFile + ".pdf";
 	}
 
-	bool yesDoWriteRobbinFile = gOutputFile != "";
+	bool yesDoWriteRibbonFile = gOutputFile != "";
 	ofstream out;
-	if( yesDoWriteRobbinFile ) {
+	if( yesDoWriteRibbonFile ) {
 		if( gVerbose ) cerr << "Output ribbons to " << gOutputFile << endl;
 		out = ofstream(gOutputFile.c_str());
 		out << std::fixed << std::setprecision(7);
@@ -577,7 +579,7 @@ int main(int argc, char **argv) {
 		}
 
 #ifndef FILL_NO_CAIRO
-		if( gReallyReallyDoSample || yesDoWriteRobbinFile || (!noPDFArg.getValue() && gDrawPrintPaths) ) {
+		if( gReallyReallyDoSample || yesDoWriteRibbonFile || (!noPDFArg.getValue() && gDrawPrintPaths) ) {
 #else
 		{
 #endif
@@ -607,7 +609,7 @@ int main(int argc, char **argv) {
 		for( const auto & samples : pts ) {
 			nbSamples += samples.size();
 			if( samples.empty() ) { continue; }
-			if( yesDoWriteRobbinFile ) {
+			if( yesDoWriteRibbonFile ) {
 				out << "closed " << samples.size() << " " << (stepNum-1) << endl;
 			}
 			Vec2d q = samples.back().pos;
@@ -618,7 +620,7 @@ int main(int argc, char **argv) {
 				if( p.radius < minToolRadius / 1.01 )
 					cerr << "ERROR : output extrusion radius is too small: "
 						<< p.radius << " << " << minToolRadius << " at " << p.pos << endl;
-				if( yesDoWriteRobbinFile ) {
+				if( yesDoWriteRibbonFile ) {
 					out << p.pos.x() << ' ' << p.pos.y()
 						<< ' ' << p.radius
 						<< ' ' << p.tangent.x() << ' ' << p.tangent.y()
@@ -645,7 +647,9 @@ int main(int argc, char **argv) {
 				double angle = std::abs(atan2(dy, dx));
 				if( angle > 1.1*3.14159/2.0 ) {
 					cout << setprecision(10) << std::fixed <<
-						"VERY BIG ANGLE " << angle << ' '<< dx << ' '<<dy<< " FOUND IN " << gOutputFile << " at pos " << p1 << std::endl
+						"VERY BIG ANGLE " << (180.0*angle/3.14159) << " degrees = atan2(" << dx << ',' <<dy << ')'
+						<< (gOutputFile == "" ? "" : " FOUND IN FILE ") << gOutputFile
+						<< " at pos " << p1 << std::endl
 						<< i0 << ": " << p0 << endl
 						<< i1 << ": " << p1 << endl
 						<< i2 << ": " << p2 << endl;
@@ -670,7 +674,7 @@ int main(int argc, char **argv) {
 
 	if( gVerbose ) cerr << endl << nbSamples << " samples.\n";
 
-	if( yesDoWriteRobbinFile ) {
+	if( yesDoWriteRibbonFile ) {
 		out.close();
 	}
 

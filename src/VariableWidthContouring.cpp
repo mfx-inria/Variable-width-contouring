@@ -138,8 +138,9 @@ findPointAtDistance(const MATedge& edge, double dist, Disk & disk) const
 	double param = -1;
 	double a_R = edge.from()->circumcircle.radius_;
 	double b_R = edge.to()->circumcircle.radius_;
-	if( dist <= a_R && dist <= b_R ) return param;
-	if( dist >= a_R && dist >= b_R ) return param;
+	double factor = 1.0+1.0e-6;
+	if( dist <= a_R*factor && dist <= b_R*factor ) return param;
+	if( dist >= a_R/factor && dist >= b_R/factor ) return param;
 	const Vec2d a = edge.from()->circumcircle.center_;
 	const Vec2d b = edge.to()->circumcircle.center_;
 	const Vec2d ab = b - a;
@@ -211,7 +212,7 @@ findPointAtDistance(const MATedge& edge, double dist, Disk & disk) const
 }
 
 
-// Compute a description of the current shape boundary, made a alternate straight edge and tangent
+// Compute a description of the current shape boundary, made of alternate straight edge and tangent
 // continuous circular arcs.
 // It *ALSO* fills the lBoundary_ and rBoundary_ maps. So after each medial axis trimming, we must
 // call this function.
@@ -262,7 +263,8 @@ computeSmoothPaths(const Component & component, SmoothPaths & out, bool walk_on_
 				maoi->rBoundary_[&(*nextEdge)] = Disk(maximalDisk.center_, radius);
 			}
 			if ( ! out.back().empty() && out.back().back() == bc) {
-				std::cerr << "Warning: trying to put the same circle in the path twice!\n";
+				std::cerr << "Warning: trying to put the same circle in the path twice! at "
+					<< bc.center() << ", radius " << bc.radius() << "\n";
 			} else {
 				out.back().push_back(bc);
 			}

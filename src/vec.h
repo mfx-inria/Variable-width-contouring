@@ -69,11 +69,11 @@ struct Vec2
     inline NT dot(const Self & rhs) const { return x() * rhs.x() + y() * rhs.y(); }
     inline NT operator*(const Self & rhs) const { return dot(rhs); }
     
-    inline Self operator+=(const Self & rhs) { *this = *this + rhs; return *this; }
-    inline Self operator-=(const Self & rhs) { *this = *this - rhs; return *this; }
-    inline Self operator*=(const NT & rhs) { *this = *this * rhs; return *this; }
-    inline Self operator/=(const NT & rhs) { *this = *this / rhs; return *this; }
-	  inline Self & operator=(const Self & other) { x() = other.x(); y() = other.y(); return *this; }
+	inline Self operator+=(const Self & rhs) { *this = *this + rhs; return *this; }
+	inline Self operator-=(const Self & rhs) { *this = *this - rhs; return *this; }
+	inline Self operator*=(const NT & rhs) { *this = *this * rhs; return *this; }
+	inline Self operator/=(const NT & rhs) { *this = *this / rhs; return *this; }
+	inline Self & operator=(const Self & other) { x() = other.x(); y() = other.y(); return *this; }
 
     inline Self operator-() const { return Self(-x(), -y()); }
 
@@ -194,7 +194,7 @@ struct Vec3
     inline NT l1norm() const { return std::max(std::abs(x()), std::max(std::abs(y()), std::abs(z()))); }
     inline NT norm2() const { return x()*x()+y()*y()+z()*z(); }
 	inline NT length() const {
-		return std::hypot(x(), y(), x());
+		return std::hypot(x(), std::hypot(y(), z()));
 	}
     inline void normalize() { const NT l = length(); x() /= l; y() /= l; z() /= l; }
     inline Self normalized() const { const NT l = length(); return Self(x()/l, y()/l, z()/l); }
@@ -313,7 +313,7 @@ struct alignas(16) Vec4
 
     inline NT squaredLength() const { return x()*x()+y()*y()+z()*z()+w()*w(); }
     inline NT length() const {
-		return std::hypot(std::hypot(x(), y(), z()), w());
+		return std::hypot(std::hypot(x(), y()), std::hypot(z(), w()));
 		/*
 		NT dx = std::abs(x());
 		NT dy = std::abs(y());

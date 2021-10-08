@@ -38,26 +38,6 @@ operator()(const Vec2d & a, const Vec2d & b) {
 	}
 }
 
-Vec2d
-BBox::
-center() const {
-	return 0.5*Vec2d(max_.x()+min_.x(), max_.y()+min_.y());
-}
-
-Vec2d
-BBox::
-size() const {
-	return Vec2d(max_.x()-min_.x(), max_.y()-min_.y());
-}
-
-double
-BBox::
-diagonal() const {
-	return size().length();
-}
-
-const std::function<bool (double)> Utils::is_finite = [](double d) { return std::isfinite(d); };
-
 double
 QuadraticArc::
 analyticLength() const {
@@ -89,7 +69,7 @@ analyticLength() const {
 	const double AB = A.dot(B);
 	const double AF = A.dot(F);
 
-	// TODO: Maybe replace /A2 by /A1/A2? (computing A2 might overflow)
+	// TODO: Maybe replace /A2 by /A1/A1? (computing A2 might overflow)
 	return
 		(F1 * AF / A2) - (B1 * AB / A2)
 		+
@@ -97,6 +77,27 @@ analyticLength() const {
 		*
 		(std::log(AF + A1*F1) - std::log(AB + A1*B1));
 }
+
+
+Vec2d
+BBox::
+center() const {
+	return 0.5*Vec2d(max_.x()+min_.x(), max_.y()+min_.y());
+}
+
+Vec2d
+BBox::
+size() const {
+	return Vec2d(max_.x()-min_.x(), max_.y()-min_.y());
+}
+
+double
+BBox::
+diagonal() const {
+	return size().length();
+}
+
+const std::function<bool (double)> Utils::is_finite = [](double d) { return std::isfinite(d); };
 
 double
 Utils::
@@ -129,6 +130,7 @@ quadraticBezierNumLength(const QuadraticArc & iq) {
 
 void
 Utils::
+// Compares the accuracies of two methods for computing the length of a quadratic Bezier arc.
 test() {
 	for( int i(0); i < 100; ++i ) {
 		QuadraticArc q;
@@ -175,16 +177,19 @@ void Utils::quadraticBezierSplitAtArcLength(
 	}
 }
 
-
 // smallest of {r0, r1} that lies in the interval [min, max]
 void
 Utils::
 smallestInInterval(double min, double max, int & numSols, double & r0, double & r1) {
-	// ASSUMES r0 <= r1
-	if( numSols == 0 ) return;
+	// ASSUMES r0 <= r1 and numSols in {0, 1, 2}
+	if( numSols == 0 ) return; // there is no valid solution
+	// Here, numSols >= 1, so r0 is valid. Is it in the interval?
 	if( (min <= r0) && (r0 <= max) ) { numSols = 1; return; }
-	if( numSols == 1 ) { numSols = 0; return; }
+	// r0 is not in the interval
+	if( numSols == 1 ) { numSols = 0; return; } // r1 is not valid, invalidate all and return
+	// Here, numSols == 2, so r1 is valid. Is it in the interval?
 	if( (min <= r1) && (r1 <= max) ) { numSols = 1; r0 = r1; return; }
+	// r1 was not in the interval, invalidate all and return
 	numSols = 0;
 }
 
@@ -212,12 +217,15 @@ solveQuadratic(double a, double b, double c, int & numSols, double & r0, double 
 	double q;
 	if( b < 0.0 ) q = - (b - sqrtOfDisc); // q > 0
 	else	  q = - (b + sqrtOfDisc); // q < 0
+	// q is the numerator with highest absolute value, which is better numerically for the division
+	// by q below:
 	r0 = q / a;
-	r1 = c / q;
+	r1 = c / q; // Because r0*r1 == c/a
 	if( r0 > r1 ) std::swap(r0, r1);
 	numSols = 2;
 }
 
+// returns projection of point x on line (a--b)
 Vec2d
 Utils::
 project(const Vec2d & x, const Vec2d & a, const Vec2d b) {
@@ -241,13 +249,15 @@ bool
 BitangentComputer::
 rightRight(const BoundaryCircle & n1, const BoundaryCircle & n2, Vec2d & p1, Vec2d & p2) const {
 	Vec2d D = n2.center() - n1.center();
-	double d2 = D.squaredLength();
+	double L = D.length();
 	double dr = n1.radius() - n2.radius();
-	if(d2 + bitangent_eps <= dr*dr) return false;
-	Vec2d Dcw(D.y(), -D.x());
-	Vec2d v(dr*D + ::sqrt(abs(d2-dr*dr))*Dcw);
-	p1 = n1.center() + (n1.radius()/d2) * v;
-	p2 = n2.center() + (n2.radius()/d2) * v;
+	if( L*L + bitangent_eps <= dr*dr ) { return false; }
+	D = D / L;
+	dr /= L;
+	const Vec2d Dcw = D.rotatedCW();
+	const Vec2d v(dr*D + ::sqrt(abs(1.0-dr*dr))*Dcw);
+	p1 = n1.center() + n1.radius() * v;
+	p2 = n2.center() + n2.radius() * v;
 	assert(std::isfinite(p1.x()) && std::isfinite(p1.y()) && std::isfinite(p2.x()) && std::isfinite(p2.y()));
 	return true;
 }
@@ -256,13 +266,15 @@ bool
 BitangentComputer::
 leftLeft(const BoundaryCircle & n1, const BoundaryCircle & n2, Vec2d & p1, Vec2d & p2) const {
 	Vec2d D = n2.center() - n1.center();
-	double d2 = D.squaredLength();
+	double L = D.length();
 	double dr = n1.radius() - n2.radius();
-	if(d2 + bitangent_eps <= dr*dr) return false;
-	Vec2d Dccw(-D.y(), D.x());
-	Vec2d v(dr*D + ::sqrt(abs(d2-dr*dr))*Dccw);
-	p1 = n1.center() + (n1.radius()/d2) * v;
-	p2 = n2.center() + (n2.radius()/d2) * v;
+	if( L*L + bitangent_eps <= dr*dr ) { return false; }
+	D = D / L;
+	dr /= L;
+	const Vec2d Dccw = D.rotatedCCW();
+	const Vec2d v(dr*D + ::sqrt(abs(1.0-dr*dr))*Dccw);
+	p1 = n1.center() + n1.radius() * v;
+	p2 = n2.center() + n2.radius() * v;
 	assert(std::isfinite(p1.x()) && std::isfinite(p1.y()) && std::isfinite(p2.x()) && std::isfinite(p2.y()));
 	return true;
 }
@@ -271,13 +283,15 @@ bool
 BitangentComputer::
 rightLeft(const BoundaryCircle & n1, const BoundaryCircle & n2, Vec2d & p1, Vec2d & p2) const {
 	Vec2d D = n2.center() - n1.center();
-	double d2 = D.squaredLength();
+	double L = D.length();
 	double sr = n1.radius() + n2.radius();
-	if( d2 + bitangent_eps <= sr*sr ) { cerr << "$$ " << d2 << ' ' << (sr*sr) << " $$"; return false; }
-	Vec2d Dcw(D.y(), -D.x());
-	Vec2d v(sr*D + ::sqrt(abs(d2-sr*sr))*Dcw);
-	p1 = n1.center() + (n1.radius()/d2) * v;
-	p2 = n2.center() - (n2.radius()/d2) * v;
+	if( L*L + bitangent_eps <= sr*sr ) { return false; }
+	D = D / L;
+	sr /= L;
+	const Vec2d Dcw = D.rotatedCW();
+	const Vec2d v(sr*D + ::sqrt(abs(1.0-sr*sr))*Dcw);
+	p1 = n1.center() + n1.radius() * v;
+	p2 = n2.center() - n2.radius() * v;
 	assert(std::isfinite(p1.x()) && std::isfinite(p1.y()) && std::isfinite(p2.x()) && std::isfinite(p2.y()));
 	return true;
 }
@@ -286,13 +300,15 @@ bool
 BitangentComputer::
 leftRight(const BoundaryCircle & n1, const BoundaryCircle & n2, Vec2d & p1, Vec2d & p2) const {
 	Vec2d D = n2.center() - n1.center();
-	double d2 = D.squaredLength();
+	double L = D.length();
 	double sr = n1.radius() + n2.radius();
-	if( d2 + bitangent_eps <= sr*sr ) return false;
-	Vec2d Dccw(-D.y(), D.x());
-	Vec2d v(sr*D + ::sqrt(abs(d2-sr*sr))*Dccw);
-	p1 = n1.center() + (n1.radius()/d2) * v;
-	p2 = n2.center() - (n2.radius()/d2) * v;
+	if( L*L + bitangent_eps <= sr*sr ) { return false; }
+	D = D / L;
+	sr /= L;
+	const Vec2d Dccw = D.rotatedCCW();
+	const Vec2d v(sr*D + ::sqrt(abs(1.0-sr*sr))*Dccw);
+	p1 = n1.center() + n1.radius() * v;
+	p2 = n2.center() - n2.radius() * v;
 	assert(std::isfinite(p1.x()) && std::isfinite(p1.y()) && std::isfinite(p2.x()) && std::isfinite(p2.y()));
 	return true;
 }
@@ -301,12 +317,14 @@ bool
 BitangentComputer::
 touching(const BoundaryCircle & n1, const BoundaryCircle & n2, Vec2d & p) const {
 	Vec2d D = n2.center() - n1.center();
-	double d2 = D.squaredLength();
+	double L = D.length();
 	double sr = n1.radius() + n2.radius();
 	double squared_sr = sr * sr;
-	if( d2 > squared_sr + bitangent_eps ) return false;
-	if( d2 < squared_sr - bitangent_eps ) return false;
-	D = D / ::sqrt(d2);
+	if( ( L*L > squared_sr + bitangent_eps ) ||
+		( L*L < squared_sr - bitangent_eps ) ) { return false; }
+	if( L > 0.0 ) {
+		D = D / L; // normalize D
+	}
 	p = n1.center() + n1.radius() * D;
 	assert(std::isfinite(p.x()) && std::isfinite(p.y()));
 	return true;

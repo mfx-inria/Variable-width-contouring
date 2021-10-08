@@ -94,17 +94,6 @@ void buildMATGraphWithBOOST(MATGraph& mat, const Paths & inputPoly, const double
 void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths, const double mm_per_unit) {
     if( paths.empty() ) return;
 
-    auto isPointSite = [&](CPtr cell) -> bool {
-        // FIXME: is it equivalent to cell->contains_point()?
-        // if so, use it.
-        if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_START_POINT) {
-            return true;
-        } else if( cell->source_category() == boost::polygon::SOURCE_CATEGORY_SEGMENT_END_POINT) {
-            return true;
-        }
-        return false;
-    };
-
     std::vector<Segment> segments;
 
     auto toSite = [&](CPtr cell) {
@@ -310,9 +299,9 @@ void buildMATGraphWithBOOST(MATGraph& mat, const CLPaths & paths, const double m
 			// setup mate.type
 			CPtr cell = edge->twin()->cell(); // the cell to the right of the edge
 			CPtr opp_cell = edge->cell();
-			if( isPointSite(cell) != isPointSite(opp_cell) ) {
+			if( cell->contains_point() != opp_cell->contains_point() ) {
 				mate.type = EdgeType::VertEdge;
-			} else if( isPointSite(cell) ) {
+			} else if( cell->contains_point() ) {
 				mate.type = EdgeType::VertVert;
 			} else {
 				mate.type = EdgeType::EdgeEdge;

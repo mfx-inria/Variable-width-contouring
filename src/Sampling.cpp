@@ -63,12 +63,11 @@ Sampling::
 moveTowardBisectorWithSegment(const Sample & sample, const Vec2d & P, const Vec2d & Q, bool & bad) {
 	assert(sample.pos.eval(Utils::is_finite));
 	assert(std::isfinite(sample.radius));
-	Vec2d U = sample.tangent;
-	U.rotateCCW();
-	Vec2d segment_tangent = (Q - P).normalized();
-	Vec2d V = segment_tangent;
-	V.rotateCW();
-	Vec2d PO = sample.pos - P;
+
+	const Vec2d U = sample.tangent.rotatedCCW();
+	const Vec2d segment_tangent = (Q - P).normalized();
+	const Vec2d V = segment_tangent.rotatedCW();
+	const Vec2d PO = sample.pos - P;
 	const double numerator = PO | V;
 	if( numerator < 0.0 ) { bad = true; return {P, P, 0}; }
 	const double denom = std::max(0.0, 1.0 - (U | V));
@@ -80,21 +79,22 @@ moveTowardBisectorWithSegment(const Sample & sample, const Vec2d & P, const Vec2
 	}
 	if( bad_seg ) t = 0.0;
 	bad = false;
-	Vec2d bisector_pos = sample.pos + (t*U);
+	const Vec2d bisector_pos = sample.pos + (t*U);
 	double val = ( bisector_pos - P ) | segment_tangent;
 	if( val < 0.0 ) { // maximal disk is not tangent in interior point of PQ
-		return moveTowardBisectorWithDisk(sample, 0, Disk(P, 0), & bad);
+		return moveTowardBisectorWithDisk(sample, 0.0, Disk(P, 0), & bad);
 	} else if( val > (Q - P).length() ) {
-		Disk disk(Q, 0.0);
-		return moveTowardBisectorWithDisk(sample, 0, Disk(Q, 0), & bad);
+		return moveTowardBisectorWithDisk(sample, 0.0, Disk(Q, 0), & bad);
 	} else if( bad_seg ) {
 		bad = true;
 		return {P, P, 0}; // dummy values
 	}
-	Vec2d bisector_tangent = (sample.tangent + segment_tangent).normalized();
+	const Vec2d bisector_tangent = (sample.tangent + segment_tangent).normalized();
+
 	assert(bisector_pos.eval(Utils::is_finite));
 	assert(bisector_tangent.eval(Utils::is_finite));
-	Sample s = {bisector_pos, bisector_tangent, distance(sample.pos, bisector_pos)};
+
+	Sample s = {bisector_pos, bisector_tangent, t};
 	return s;
 }
 
@@ -104,24 +104,27 @@ moveTowardBisectorWithDisk(const Sample & sample, double delta, const Disk & dis
 	assert(sample.pos.eval(Utils::is_finite));
 	assert(std::isfinite(sample.radius));
 	assert(std::isfinite(delta));
-	Vec2d OC = disk.center_ - sample.pos;
-	double r = disk.radius_ + delta;
-	Vec2d dir = sample.tangent;
-	dir.rotateCCW();
-	double denom = r + (dir | OC);
-	double t = 0.5 * (OC.squaredLength() - r*r) / denom;
+
+	const Vec2d dir = sample.tangent.rotatedCCW();
+	const Vec2d O = sample.pos - delta * dir; // cancel any previous inward parallel offset of the outer boundary
+	const Vec2d OC = disk.center_ - O;
+	const double R = disk.radius_;
+	const double denom = R + (dir | OC);
+	const double t = 0.5 * (OC.squaredLength() - R*R) / denom;
 	if( bad != nullptr ) {
-		*bad = (t <= 0.0) || (fabs(denom) < 1e-6);
+		*bad = (t + 1e-6 <= delta) || (fabs(denom) < 1e-6);
 		if( *bad ) return {dir, dir, 0}; // dummy value
 	}
-	Vec2d bisector_pos = sample.pos + (t*dir);
-	Vec2d circle_tangent = (bisector_pos - disk.center_).normalized();
-	circle_tangent.rotateCCW();
+	const Vec2d bisector_pos = sample.pos + ((t-delta)*dir);
+	Vec2d circle_tangent = (bisector_pos - disk.center_).normalized().rotatedCCW();
 	if( (circle_tangent | sample.tangent) < 0.0 )
 		circle_tangent.negate();
-	Vec2d bisector_tangent = (sample.tangent + circle_tangent).normalized();
+	const Vec2d bisector_tangent = (sample.tangent + circle_tangent).normalized();
+
 	assert(bisector_pos.eval(Utils::is_finite) && bisector_tangent.eval(Utils::is_finite));
-	Sample s = {bisector_pos, bisector_tangent, delta + distance(sample.pos, bisector_pos)};
+	assert(t + 1e-6 > delta);
+
+	Sample s = {bisector_pos, bisector_tangent, t};
 	return s;
 }
 

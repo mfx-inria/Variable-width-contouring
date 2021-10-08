@@ -417,7 +417,7 @@ drawPaths(const vector<vector<Sample>> & pts) {
 #if 0
 		// highlight first vertex
 		cairo_set_line_cap(context_, CAIRO_LINE_CAP_ROUND);
-		cairo_set_source_rgb(context_, 1.0, 0.8, 1.0);
+		cairo_set_source_rgb(context_, 1.0, 1.0, 1.0);
 		cairo_set_line_width(context_, lw * 2);
 		cairo_move_to(context_, path[0].pos.x(), path[0].pos.y());
 		cairo_line_to(context_, path[0].pos.x(), path[0].pos.y());

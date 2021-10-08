@@ -17,6 +17,11 @@ struct RadialCompare {
 	RadialCompare(const Vec2d & c, const Vec2d & r) : center(c), reference(r) {
 		dir = (reference - center).normalized();
 	}
+	/* Returns true if and only if we meet 'a' strictly before 'b' when the ray from 'center' to
+	 * 'reference' is rotating counter-clockwise from its start position (towards 'reference').
+	 * In angle terms, if we see 'a' and 'b' as angles in the interval [0, 2*pi) (0 included, 2*pi
+	 * excluded), the function returns true if and only if 'a' < 'b'.
+	 */
 	bool operator()(const Vec2d & a, const Vec2d & b);
 };
 
@@ -24,17 +29,18 @@ struct RadialCompare {
 
 // A plain quadratic Bezier curve.
 struct QuadraticArc {
-	Vec2d a, b, c; // a and c are endpoint, c is tangents' crossing
+	Vec2d a, b, c; // 'a' and 'c' are endpoint, 'b' is tangents' crossing
 	void reverse() {
 		std::swap(a, c);
 	}
+	// Returns the length of the quadratic Bezier arc
 	double analyticLength() const;
 };
 
 /* This struct stores a geometric description of the parabolic bisector between a point |point| and
    a segment.
    |x0| and |x1| are the signed distance from the |point| to the endpoints of the parabolic bisector
-   arc, taken along |u| ( = dot(P_i - point, u)).
+   arc, taken along |u| (x_i = dot(P_i - point, u)).
    So, we must have x0 <= x1.
    |u| has the same direction as the bisector arc.
    |v| points towards the half-plane that contains |point|, so that (u,v) can be CW or CCW, depending
@@ -57,7 +63,6 @@ struct PointSegmentBisector {
 	}
 };
 
-
 template<typename T>
 struct MinMax {
 	typedef MinMax<T> Self;
@@ -71,9 +76,10 @@ struct MinMax {
 	}
 };
 
-
 typedef MinMax<double> Interval;
 
+/* BBox means Bounding Box
+ */
 struct BBox : public MinMax<Vec2d>
 {
 	void extendToCover(const MinMax<Vec2d> & other) {
@@ -82,23 +88,22 @@ struct BBox : public MinMax<Vec2d>
 	}
 	BBox(const Vec2d & m) : MinMax<Vec2d>(m) {};
 	BBox(const Vec2d & min, const Vec2d & max) : MinMax<Vec2d>(min, max) {};
-	double diagonal() const;
-	Vec2d size() const;
 	Vec2d center() const;
+	Vec2d size() const;
+	double diagonal() const;
 };
 
 class Utils {
 public:
 	static const std::function<bool (double)> is_finite;
-
-	static Vec2d project(const Vec2d & x, const Vec2d & a, const Vec2d b);
+	// compute length of Bezier arc by recursive subdivision
+	static double quadraticBezierNumLength(const QuadraticArc & q);
+	static void test();
 
 	// de Casteljeau split
 	static void quadraticBezierSplitAtT(
 			const QuadraticArc & q, double t,
 			QuadraticArc & left, QuadraticArc & right);
-	static double quadraticBezierNumLength(const QuadraticArc & q);
-	static void test();
 
 	// bisection to find parameter corresponding to desired arc-length
 	static void quadraticBezierSplitAtArcLength(
@@ -108,17 +113,19 @@ public:
 	// smallest of {r0, r1} that lies in the interval [min, max]
 	static void smallestInInterval(double min, double max, int & numSols, double & r0, double & r1);
 
+	// Solves polynomial a*X^2 + b*X + c = 0, puts solutions in r0 and r1
 	static void solveQuadratic(double a, double b, double c, int & numSols, double & r0, double & r1);
 
+	// Returns the orthogonal projection of point 'x' onto the line supporting 'a' and 'b'
+	static Vec2d project(const Vec2d & x, const Vec2d & a, const Vec2d b);
 
-	/* scale the input vector (passed by reference) until is Linf norm is <= 1.0.
+	/* scale the input vector (passed by reference) so that its Linf norm is in [1/2, 1).
 	   Returns the required scaling factor.
 	   This is useful to compute the euclidean length of the vector without overflow.
 	   Mostly useful with vectors that store integer coordinates, where the computation of the squared
 	   length, prior to applying sqrt() is likely to overflow.
 	 */
-	template<typename V2>
-	static double reduceVec(V2 & v) {
+	static double reduceVec(Vec2d & v) {
 		int exponent;
 		double x = v.x();
 		double y = v.y();
@@ -129,7 +136,7 @@ public:
 			y = std::frexp(y, &exponent);
 			x = std::ldexp(x, -exponent);
 		}
-		v = V2(x,y);
+		v = Vec2d(x,y);
 		return ldexp(1.0, exponent);
 	}
 
@@ -139,6 +146,5 @@ public:
 	// |pointOnLine|.
 	static double distanceToLine(const Vec2d & query, const Vec2d & pointOnLine, const Vec2d & lineDir);
 };
-
 
 #endif // _CAVITIES_UTILS_H_

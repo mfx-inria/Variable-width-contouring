@@ -23,6 +23,7 @@ CollapsedAxis::
 reorder() {
 	assert( 1 == subAxes.size() );
 	SubAxis & sub = subAxes[0];
+	assert( 2 <= sub.points.size() );
 	if( 0 >= farAP.pos() ) { // farPos is 0 or -1
 		//cerr << "Reorder: overlap segments.\n";
 		sub.points.push_back(sub.points[1]); // first and last segments are the same
@@ -49,10 +50,10 @@ incr(AxisPos & ap) const {
 		if( ap.axis() == subAxes.size() ) { // go back to starting |ap|
 			--ap.axis();
 			ap.pos() = static_cast<int>(axis.points.size()) - 1;
-			return false;
+			return false; // no change
 		}
 	}
-	return true;
+	return true; // actual change
 }
 
 void
@@ -656,7 +657,7 @@ drawMedialAxis(cairo_t * context, double lw, bool drawVertices,
 			static int len1  = sizeof(dashed1) / sizeof(dashed1[0]);
 			cairo_set_dash(context, dashed1, len1, 0);
 			cairo_set_line_width(context, lw*0.15);
-			cairo_set_source_rgba(context,0,0,0,1);
+			//cairo_set_source_rgba(context,0,0,0,1);
 			cairo_move_to(context, p.x()+d.radius_, p.y());
 			cairo_arc(context, p.x(), p.y(), d.radius_, 0.0, 2*M_PI);
 			cairo_stroke(context);

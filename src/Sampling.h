@@ -84,6 +84,7 @@ public:
 			out(s);
 			return;
 		}
+		const double clockFactor = clockwise ? -1.0 : 1.0;
 		list<VP> sampling;
 		sampling.push_back(makeVP(v0));
 		sampling.push_back(makeVP(v1));
@@ -94,9 +95,9 @@ public:
 				out(it1->projected);
 				it0 = it1++;
 			} else { // splitting
-				// FIXME: THIS TEST is buggy. See sampleCircularArc() below for a better test.
-				if( (it1 != last) && ((it0->v | it1->v) > 0.0) ) {
-					it1 = sampling.erase(it1);
+				auto it2 = it1; ++it2;
+				if( (it1 != last) && ((it0->v | it2->v) > 0.0) && (clockFactor*det(it0->v,it2->v) > 0.0) ) {
+					it1 = sampling.erase(it1); // it1 is now equal to it2
 					Vec2d d = it1->v - it0->v;
 					it1 = sampling.insert(it1, makeVP(it0->v + (0.66666 * d)));
 					it1 = sampling.insert(it1, makeVP(it0->v + (0.33333 * d)));
@@ -118,16 +119,20 @@ public:
 			Vec2d vn = v.normalized();
 			Vec2d tangent = vn;
 			if( clockwise ) tangent.rotateCW(); else tangent.rotateCCW();
-			Sample proj, border{circ.center() + (circ.radius() * vn), tangent, delta};
+			Sample proj, border{circ.center() + (circ.radius() * vn), tangent, delta}; // {position, tangent, radius}
 			proj =  project(border);
 			return VP{vn, proj};
 		};
+		const double clockFactor = clockwise ? -1.0 : 1.0;
 		list<VP> sampling;
 		sampling.push_back(makeVP(v0));
 		sampling.push_back(makeVP(v1));
 		typename list<VP>::iterator it1 = sampling.begin(), it0 = it1++, last;
 		last = --sampling.end();
-#define FILL_SUBDIV_LIMIT 2000
+#define FILL_SUBDIV_LIMIT 300
+		/* All (but one) input files in the 300-database and test_geometry* never go beyond N == 250.
+		 * One file, input/test_geometry__svg_txt/doubleOutSpike.txt, goes to N == 268.
+		 * */
 #ifdef FILL_SUBDIV_LIMIT
 		int N(0);
 		while( (N < FILL_SUBDIV_LIMIT) && it1 != sampling.end() ) {
@@ -140,20 +145,18 @@ public:
 				it0 = it1++;
 			} else { // splitting
 				auto it2 = it1; ++it2;
-				if( (it1 != last) && ((it0->v | it2->v) > 0.0) && (det(it0->v,it2->v) > 0.0) ) {
-					it1 = sampling.erase(it1);
+				if( (it1 != last) && ((it0->v | it2->v) > 0.0) && (clockFactor*det(it0->v,it2->v) > 0.0) ) {
+					it1 = sampling.erase(it1); // it1 is now equal to it2
 					Vec2d d = it1->v - it0->v;
-					double k = 2.0/3.0;
-					it1 = sampling.insert(it1, makeVP(it0->v + (k * d)));
-					k = 1.0/3.0;
-					it1 = sampling.insert(it1, makeVP(it0->v + (k * d)));
+					it1 = sampling.insert(it1, makeVP(it0->v + (0.66666 * d)));
+					it1 = sampling.insert(it1, makeVP(it0->v + (0.33333 * d)));
 				} else { // split in 2
 					it1 = sampling.insert(it1, makeVP(splitArcInHalf(it0->v, it1->v, clockwise)));
 				}
 			}
 		}
 	}
-};
+}; // end of class Sampling
 
 #undef FILL_SUBDIV_LIMIT
 

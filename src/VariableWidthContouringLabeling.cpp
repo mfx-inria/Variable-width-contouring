@@ -777,7 +777,7 @@ collapse(vector<Disk> & cheekPrecursors, bool sharpCut) {
 
 	auto markCollapsedAndPropagate = [&](EdgeIterator edge) { // Propagate collapse
 		MATvert * to = edge->to();
-		assert(to->circumcircle.radius_ <= maxCollapseRadius());
+		assert(to->circumcircle.radius_ <= maxCollapseRadius()*(1.0+1.0e-6));
 		to->collapse();
 		for( EdgeIterator e = to->edges_.begin(); e != to->edges_.end(); ++e ) {
 			if( e->to()->is_collapsed() ) continue; // already collapsed
