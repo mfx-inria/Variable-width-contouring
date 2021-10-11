@@ -57,7 +57,7 @@ void VWCInfiller::terminateInfill(int brush)
 
 void VWCInfiller::prepareInfillForSlice(int id, const AAB<2, int>& xy_slice_box, float, double, int brush)
 {
-    /// retrieve extruder used for the infill by this brush
+    // retrieve extruder used for the infill by this brush
     {
         auto s = m_EnumerableSettings->getSettingByName("infill_extruder_" + std::to_string(brush));
         if (s == nullptr) {
@@ -65,38 +65,47 @@ void VWCInfiller::prepareInfillForSlice(int id, const AAB<2, int>& xy_slice_box,
         }
         s->getValue(extruder_id_);
     }
-    /// retrieve extruder nozzle diameter
-    float nd = 0.0f;
+    float v;
+    // retrieve extruder nozzle diameter
     {
         auto s = m_EnumerableSettings->getSettingByName("nozzle_diameter_mm_" + std::to_string(extruder_id_));
         if (s == nullptr) {
             throw Fatal("This plugin is only for FDM");
         }
-        s->getValue(nd);
+        s->getValue(v); nozzle_diameter_ = v;
     }
-    nozzle_diameter_ = nd;
-    minBeadWidth_ = 0.75 * nozzle_diameter_; // mm
-    maxBeadWidth_ = 2.5 * nozzle_diameter_; // mm
-    /// retrieve processing scale factor
-    float scale = 0.0f;
+    {
+        auto s = m_EnumerableSettings->getSettingByName("vwc_num_beads_" + std::to_string(extruder_id_));
+        if (s == nullptr) {
+            throw Fatal("This plugin is only for FDM");
+        }
+        s->getValue(num_beads_);
+    }
+    {
+        auto s = m_EnumerableSettings->getSettingByName("vwc_bead_min_width_mm_" + std::to_string(extruder_id_));
+        if (s == nullptr) {
+            throw Fatal("Fatality kill (VWC min)");
+        }
+        s->getValue(v); minBeadWidth_ = v;
+    }
+    {
+        auto s = m_EnumerableSettings->getSettingByName("vwc_bead_max_width_mm_" + std::to_string(extruder_id_));
+        if (s == nullptr) {
+            throw Fatal("Fatality kill (VWC max)");
+        }
+        s->getValue(v); maxBeadWidth_ = v;
+    }
+    if( maxBeadWidth_ < 2.0 * minBeadWidth_ ) {
+        throw Fatal("Fatality kill (VWC 2*min>max)");
+    }
+    // retrieve processing scale factor
     {
         auto s = m_EnumerableSettings->getSettingByName("xy_mm_per_int");
         if (s == nullptr) {
             throw Fatal("Missing setting");
         }
-        s->getValue(scale);
+        s->getValue(v); xy_mm_per_unit_ = v;
     }
-    xy_mm_per_unit_ = scale;
-
-    /*// retrieve line width
-    float line_width_mm = 0.0f;
-    {
-        auto s = m_EnumerableSettings->getSettingByName("line_width_mm_" + std::to_string(brush));
-        if (s == nullptr) {
-            throw Fatal("Missing setting");
-        }
-        s->getValue(line_width_mm);
-    }*/
 }
 
 // ----------------------------------------------- 
@@ -264,13 +273,14 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
 
     // GO!
 
-    int step = -1;
-    while( step < 5000 ) {
+    int step = 0;
+    const int numSteps = num_beads_ == 0 ? 5000 : num_beads_;
+    while( step < numSteps ) {
         ++step;
         // Compute connected components. We work on each separately, so that the uniform offset can be customized to each.
         components.clear();
         mat.computeConnectedComponents(components);
-        if( 0 == components.size() ) {
+        if( (step > 5) || (0 == components.size()) ) {
             break;
         }
         else {
@@ -367,10 +377,10 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
                 // customize flow
                 int flow_idx = fills.back()->addPerVertexAttribute("flow_multiplier");
                 for( int i = 0; i < static_cast<int>(beadWidth.size()); ++i ) {
-                    fills.back()->setPerVertexAttributeValue(flow_idx, i, beadWidth[i]);
+                    fills.back()->setPerVertexAttributeValue(flow_idx, i, 1.5 * beadWidth[i] / nozzle_diameter_);
                 }
-                int cst_flow_idx = fills.back()->addPathAttribute("flow_multiplier");
-                fills.back()->setPathAttributeValue(cst_flow_idx, minBeadWidth_ / nozzle_diameter_);
+                //int cst_flow_idx = fills.back()->addPathAttribute("flow_multiplier");
+                //fills.back()->setPathAttributeValue(cst_flow_idx, minBeadWidth_ / nozzle_diameter_);
             }
             clipperPath.clear();
             beadWidth.clear();
@@ -409,8 +419,76 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
 
 // -----------------------------------------------
 
-bool VWCInfillerPlugin::addPluginSettings(IceSLInterface::EnumerableSettingsInterface& enumerable_settings)
+bool VWCInfillerPlugin::addPluginSettings(IceSLInterface::EnumerableSettingsInterface & enumerable_settings)
 {
+    using IE = IceSLInterface::EnumerableSettingsInterface;
+    const int numBrushes = enumerable_settings.getNumberOfBrushes();
+    minBeadWidth_.resize(numBrushes, 0.3f);
+    maxBeadWidth_.resize(numBrushes, 0.7f);
+    numBeads_.resize(numBrushes, 4);
+    std::unique_ptr<IE::SettingInterface> s;
+    for( int i = 0; i < numBrushes; ++i ) {
+        s = enumerable_settings.addSettingFromPlugin(
+                & numBeads_[i],
+                & minBeads_,
+                & maxBeads_,
+                "vwc_num_beads_" + std::to_string(i),
+                "Number of beads (0 means, as many as possible)",
+                "Brush_" + std::to_string(i),
+                "Specifies the number of beads used during contouring.",
+                912, // rank to order multiple settings, lower appears before
+                [this, &enumerable_settings, i]() -> bool { // show setting only when the infiller is selected
+                    std::string infiller;
+                    enumerable_settings.getSettingByName("infill_type_" + std::to_string(i))->getValue(infiller);
+                    return infiller == this->name();
+                },
+                IE::e_NoUnit,
+                IE::e_NoFlag
+                );
+        if (s == nullptr) {
+            return false;
+        }
+        s = enumerable_settings.addSettingFromPlugin(
+                & minBeadWidth_[i],
+                & minBeadWidth_min_,
+                & minBeadWidth_max_,
+                "vwc_bead_min_width_mm_" + std::to_string(i),
+                "Minimal bead width",
+                "Brush_" + std::to_string(i),
+                "Specifies the minimal bead width used during contouring.",
+                913, // rank to order multiple settings, lower appears before
+                [this, &enumerable_settings, i]() -> bool { // show setting only when the infiller is selected
+                    std::string infiller;
+                    enumerable_settings.getSettingByName("infill_type_" + std::to_string(i))->getValue(infiller);
+                    return infiller == this->name();
+                },
+                IE::e_MM,
+                IE::e_NoFlag
+            );
+        if (s == nullptr) {
+            return false;
+        }
+        s = enumerable_settings.addSettingFromPlugin(
+                & maxBeadWidth_[i],
+                & maxBeadWidth_min_,
+                & maxBeadWidth_max_,
+                "vwc_bead_max_width_mm_" + std::to_string(i),
+                "Maximal bead width",
+                "Brush_" + std::to_string(i),
+                "Specifies the maximal bead width used during contouring.",
+                914, // rank to order multiple settings, lower appears before
+                [this, &enumerable_settings, i]() -> bool { // show setting only when the infiller is selected
+                    std::string infiller;
+                    enumerable_settings.getSettingByName("infill_type_" + std::to_string(i))->getValue(infiller);
+                    return infiller == this->name();
+                },
+                IE::e_MM,
+                IE::e_NoFlag
+            );
+        if (s == nullptr) {
+            return false;
+        }
+    }
     return true;
 }
 

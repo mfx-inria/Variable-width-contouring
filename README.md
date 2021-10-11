@@ -15,6 +15,8 @@ found [here](https://github.com/BagelOrb/ToolpathVisualizer).
 - [Samuel Hornus](https://members.loria.fr/samuel.hornus/) (Inria, France)
 - [Tim Kuipers](https://kuipers.weblog.tudelft.nl/) (Ultimaker, TU Delft, Netherlands)
 
+[Salim Perchy](https://members.loria.fr/SPerchy/) and [Pierre Bedell](https://fr.linkedin.com/in/pierre-bedell-667328a0) also contributed to Windows- and plugin-specific code.
+
 ## Compilation dependencies
 
 ### For compiling the `fill` binary:
@@ -23,7 +25,7 @@ found [here](https://github.com/BagelOrb/ToolpathVisualizer).
 - TCLAP http://tclap.sourceforge.net
 - Clipper http://angusj.com/delphi/clipper.php
 - If the ``VWC_USE_CGAL_MEDIAL_AXIS`` CMake option is checked, then the code depends on CGAL https://www.cgal.org
-- If the ``VWC_USE_BOOST_MEDIAL_AXIS`` CMake option is checked, then the code depends on BOOST
+- If **both** the ``VWC_USE_BOOST_MEDIAL_AXIS`` and ``VWC_USE_EXTERNAL_BOOST`` CMake options are checked, then the code depends on BOOST
 - If the ``VWC_USE_CAIRO_PDF`` CMake option is checked, then the code depends on Cairo https://www.cairographics.org
 
 ### For compiling the [IceSL](https://icesl.loria.fr/) plugin:
@@ -77,7 +79,7 @@ The ``input/`` directory has some sample input files.
 The set of 300 input files in input/dataset/ is the one used in the paper and
 originates from the following work:
 
-> _A framework for adaptive width control of dense contour-parallel toolpaths in fused deposition modeling_. Tim Kuipers, Eugeni L. Doubrovski, Jun Wu, and Charlie C. L. Wang. 2020. [arXiv:2004.13497 [cs.GR]](https://arxiv.org/abs/2004.13497) In submission.
+> _A framework for adaptive width control of dense contour-parallel toolpaths in fused deposition modeling_. Tim Kuipers, Eugeni L. Doubrovski, Jun Wu, and Charlie C. L. Wang. 2020. _Computer Aided Design, vol. 128._ [arXiv](https://arxiv.org/abs/2004.13497), [DOI](http://dx.doi.org/10.1016/j.cad.2020.102907).
 
 ### Generating lots of output
 

@@ -40,19 +40,27 @@ class VWCInfiller : public IceSLInterface::IInfillerInterface
 
         // work parameters
         int extruder_id_ = -1;
+        int num_beads_ = 0;
         double nozzle_diameter_ = 0.4; // mm
         double xy_mm_per_unit_ = 1.0f/4096.0f; // mm
         double minBeadWidth_ = 0.75 * nozzle_diameter_; // mm
-        double maxBeadWidth_ = 2.5 * nozzle_diameter_; // mm
-        const double simplificationThreshold_ = 1.05; // unit-less;
+        double maxBeadWidth_ = 2.0 * nozzle_diameter_; // mm
+        const double simplificationThreshold_ = 1.05; // unitless;
 };
 
 class VWCInfillerPlugin : public IceSLInterface::IInfillerPlugin
 {
     private:
 
-        //float m_LineWidth_min_mm = 0.3f;
-        //float m_LineWidth_max_mm = 1.0f;
+        std::vector<float> minBeadWidth_;
+        float minBeadWidth_min_ = 0.2f;
+        float minBeadWidth_max_ = 0.4f;
+        std::vector<float> maxBeadWidth_;
+        float maxBeadWidth_min_ = 0.6f;
+        float maxBeadWidth_max_ = 1.2f;
+        std::vector<int> numBeads_;
+        int minBeads_ = 0;
+        int maxBeads_ = 5000;
 
     public:
 
