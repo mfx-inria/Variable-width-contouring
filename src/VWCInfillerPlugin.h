@@ -46,6 +46,16 @@ class VWCInfiller : public IceSLInterface::IInfillerInterface
         double minBeadWidth_ = 0.75 * nozzle_diameter_; // mm
         double maxBeadWidth_ = 2.0 * nozzle_diameter_; // mm
         const double simplificationThreshold_ = 1.05; // unitless;
+        // save some parameters
+        bool overtakeIcesl_ = false;
+        bool print_perimeter = true;
+        int num_shells = 3;
+        bool path_priority_use_default = true;
+        int path_priority_perimeter = 3;
+        int path_priority_shell = 4;
+        int path_priority_infill = 2;
+        int path_priority_bridge = 1;
+        float cover_thickness_mm = 0.6;
 };
 
 class VWCInfillerPlugin : public IceSLInterface::IInfillerPlugin
@@ -61,6 +71,9 @@ class VWCInfillerPlugin : public IceSLInterface::IInfillerPlugin
         std::vector<int> numBeads_;
         int minBeads_ = 0;
         int maxBeads_ = 5000;
+        bool overtakeIcesl_ = false;
+        bool overtakeIcesl_min_ = false;
+        bool overtakeIcesl_max_ = true;
 
     public:
 

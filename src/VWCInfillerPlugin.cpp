@@ -44,13 +44,58 @@ void VWCInfiller::setWorldSpace(v3f world_corner_mm, v3f extent_mm)
 void VWCInfiller::prepareInfill(int brush)
 {
     Sampling::len_threshold = 0.01; // mm
+    std::unique_ptr<IceSLInterface::EnumerableSettingsInterface::SettingInterface> s;
+    s = m_EnumerableSettings->getSettingByName("vwc_overtakes_icesl_"+std::to_string(brush));
+    if (s == nullptr) { throw Fatal("Missing setting vwc_overtakes_icesl_"); }
+    s->getValue(overtakeIcesl_);
+    if( ! overtakeIcesl_ ) return;
+    s = m_EnumerableSettings->getSettingByName("path_priority_use_default");
+    if (s == nullptr) { overtakeIcesl_ = false; throw Fatal("Missing setting path_priority_use_default"); }
+    s->getValue(path_priority_use_default);
+    s = m_EnumerableSettings->getSettingByName("path_priority_perimeter");
+    if (s == nullptr) { overtakeIcesl_ = false; throw Fatal("Missing setting path_priority_perimeter"); }
+    s->getValue(path_priority_perimeter);
+    s = m_EnumerableSettings->getSettingByName("path_priority_shell");
+    if (s == nullptr) { overtakeIcesl_ = false; throw Fatal("Missing setting path_priority_shell"); }
+    s->getValue(path_priority_shell);
+    s = m_EnumerableSettings->getSettingByName("path_priority_infill");
+    if (s == nullptr) { overtakeIcesl_ = false; throw Fatal("Missing setting path_priority_infill"); }
+    s->getValue(path_priority_infill);
+    s = m_EnumerableSettings->getSettingByName("path_priority_bridge");
+    if (s == nullptr) { overtakeIcesl_ = false; throw Fatal("Missing setting path_priority_bridge"); }
+    s->getValue(path_priority_bridge);
+    s = m_EnumerableSettings->getSettingByName("cover_thickness_mm_"+std::to_string(brush));
+    if (s == nullptr) { overtakeIcesl_ = false; throw Fatal("Missing setting cover_thickness_mm_X"); }
+    s->getValue(cover_thickness_mm);
+    s = m_EnumerableSettings->getSettingByName("print_perimeter_"+std::to_string(brush));
+    if (s == nullptr) { overtakeIcesl_ = false; throw Fatal("Missing setting print_perimeter_X"); }
+    s->getValue(print_perimeter);
+    s = m_EnumerableSettings->getSettingByName("num_shells_"+std::to_string(brush));
+    if (s == nullptr) { overtakeIcesl_ = false; throw Fatal("Missing setting num_shells_X"); }
+    s->getValue(num_shells);
+    m_EnumerableSettings->getSettingByName("path_priority_use_default")->setValue(false);
+    m_EnumerableSettings->getSettingByName("path_priority_perimeter")->setValue(2);
+    m_EnumerableSettings->getSettingByName("path_priority_shell")->setValue(3);
+    m_EnumerableSettings->getSettingByName("path_priority_infill")->setValue(4);
+    m_EnumerableSettings->getSettingByName("path_priority_bridge")->setValue(1);
+    m_EnumerableSettings->getSettingByName("cover_thickness_mm_"+std::to_string(brush))->setValue(0.0f);
+    m_EnumerableSettings->getSettingByName("print_perimeter_"+std::to_string(brush))->setValue(false);
+    m_EnumerableSettings->getSettingByName("num_shells_"+std::to_string(brush))->setValue(0);
 }
 
 // -----------------------------------------------
 
 void VWCInfiller::terminateInfill(int brush)
 {
-
+    if( ! overtakeIcesl_ ) return;
+    m_EnumerableSettings->getSettingByName("path_priority_use_default")->setValue(path_priority_use_default);
+    m_EnumerableSettings->getSettingByName("path_priority_perimeter")->setValue(path_priority_perimeter);
+    m_EnumerableSettings->getSettingByName("path_priority_shell")->setValue(path_priority_shell);
+    m_EnumerableSettings->getSettingByName("path_priority_infill")->setValue(path_priority_infill);
+    m_EnumerableSettings->getSettingByName("path_priority_bridge")->setValue(path_priority_shell);
+    m_EnumerableSettings->getSettingByName("cover_thickness_mm_"+std::to_string(brush))->setValue(cover_thickness_mm);
+    m_EnumerableSettings->getSettingByName("print_perimeter_"+std::to_string(brush))->setValue(print_perimeter);
+    m_EnumerableSettings->getSettingByName("num_shells_"+std::to_string(brush))->setValue(num_shells);
 }
 
 // -----------------------------------------------
@@ -280,7 +325,7 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
         // Compute connected components. We work on each separately, so that the uniform offset can be customized to each.
         components.clear();
         mat.computeConnectedComponents(components);
-        if( (step > 5) || (0 == components.size()) ) {
+        if( 0 == components.size() ) {
             break;
         }
         else {
@@ -352,6 +397,8 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
         // output
         CLPath clipperPath;
         std::vector<double> beadWidth;
+        const auto pathType = overtakeIcesl_ ? (step == 1 ? PathType::e_Perimeter : PathType::e_Shell) :
+            PathType::e_Infill;
         for( const auto & samples : pts ) {
             nbSamples += samples.size();
             if( samples.empty() ) continue;
@@ -372,7 +419,7 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
             if( closePath(clipperPath, beadWidth) ) {
                 fills.push_back(std::unique_ptr<IceSLInterface::IPath>(new IceSLInterface::Path()));
                 fills.back()->createPath(clipperPath, true);
-                fills.back()->setPathType(PathType::e_Infill);
+                fills.back()->setPathType(pathType);
                 fills.back()->setTool(extruder_id_);
                 // customize flow
                 int flow_idx = fills.back()->addPerVertexAttribute("flow_multiplier");
@@ -428,6 +475,11 @@ bool VWCInfillerPlugin::addPluginSettings(IceSLInterface::EnumerableSettingsInte
     numBeads_.resize(numBrushes, 4);
     std::unique_ptr<IE::SettingInterface> s;
     for( int i = 0; i < numBrushes; ++i ) {
+        auto Zarathustra = [this, &enumerable_settings, i]() -> bool { // show setting only when the infiller is selected
+            std::string infiller;
+            enumerable_settings.getSettingByName("infill_type_" + std::to_string(i))->getValue(infiller);
+            return infiller == this->name();
+        };
         s = enumerable_settings.addSettingFromPlugin(
                 & numBeads_[i],
                 & minBeads_,
@@ -437,11 +489,7 @@ bool VWCInfillerPlugin::addPluginSettings(IceSLInterface::EnumerableSettingsInte
                 "Brush_" + std::to_string(i),
                 "Specifies the number of beads used during contouring.",
                 912, // rank to order multiple settings, lower appears before
-                [this, &enumerable_settings, i]() -> bool { // show setting only when the infiller is selected
-                    std::string infiller;
-                    enumerable_settings.getSettingByName("infill_type_" + std::to_string(i))->getValue(infiller);
-                    return infiller == this->name();
-                },
+                Zarathustra,
                 IE::e_NoUnit,
                 IE::e_NoFlag
                 );
@@ -457,11 +505,7 @@ bool VWCInfillerPlugin::addPluginSettings(IceSLInterface::EnumerableSettingsInte
                 "Brush_" + std::to_string(i),
                 "Specifies the minimal bead width used during contouring.",
                 913, // rank to order multiple settings, lower appears before
-                [this, &enumerable_settings, i]() -> bool { // show setting only when the infiller is selected
-                    std::string infiller;
-                    enumerable_settings.getSettingByName("infill_type_" + std::to_string(i))->getValue(infiller);
-                    return infiller == this->name();
-                },
+                Zarathustra,
                 IE::e_MM,
                 IE::e_NoFlag
             );
@@ -477,14 +521,26 @@ bool VWCInfillerPlugin::addPluginSettings(IceSLInterface::EnumerableSettingsInte
                 "Brush_" + std::to_string(i),
                 "Specifies the maximal bead width used during contouring.",
                 914, // rank to order multiple settings, lower appears before
-                [this, &enumerable_settings, i]() -> bool { // show setting only when the infiller is selected
-                    std::string infiller;
-                    enumerable_settings.getSettingByName("infill_type_" + std::to_string(i))->getValue(infiller);
-                    return infiller == this->name();
-                },
+                Zarathustra,
                 IE::e_MM,
                 IE::e_NoFlag
             );
+        if (s == nullptr) {
+            return false;
+        }
+        s = enumerable_settings.addSettingFromPlugin(
+                & overtakeIcesl_,
+                & overtakeIcesl_min_,
+                & overtakeIcesl_max_,
+                "vwc_overtakes_icesl_" + std::to_string(i),
+                "VWC Takes The Wheel!",
+                "Brush_" + std::to_string(i),
+                "VWC does the perimeter and the shells.",
+                914, // rank to order multiple settings, lower appears before
+                Zarathustra,
+                IE::e_NoUnit,
+                IE::e_NoFlag
+                );
         if (s == nullptr) {
             return false;
         }
