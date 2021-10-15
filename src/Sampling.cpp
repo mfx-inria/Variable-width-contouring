@@ -1,10 +1,11 @@
-/* vim: set sts=0 ts=4 sw=4 noet : */
+/* vim: set sts=0 ts=4 sw=4 noet tw=0 : */
 
 #include "Sampling.h"
 
 #include <stack>
 #include <algorithm>
 
+using namespace std;
 
 double Sampling::len_threshold = 0.005;
 
@@ -142,4 +143,47 @@ splitArcInHalf(const Vec2d & v0, const Vec2d & v1, bool clockwise) {
 		mid.rotateCCW();
 	}
 	return mid;
+}
+
+void
+Sampling::
+sampleSmoothPaths(
+		const SmoothPaths & smoothPaths,
+		vector<vector<Sample>> & samples,
+		double minToolRadius) {
+	samples.clear();
+	for( const SmoothPath & sp : smoothPaths ) {
+		size_t N = sp.size();
+		if( N == 0 ) continue;
+		samples.emplace_back();
+		vector<Sample> & path = samples.back();
+		auto inserter = [&](const Sample & s) { path.push_back(s); };
+		if( N == 1 ) {
+			const Vec2d c = sp[0].center();
+			const double r =  sp[0].radius();
+			sampleCircularArc(c+r*Vec2d(0,1), c-r*Vec2d(0,1), sp[0], inserter, /*clockwise=*/false);
+			sampleCircularArc(c-r*Vec2d(0,1), c+r*Vec2d(0,1), sp[0], inserter, /*clockwise=*/false);
+			continue;
+		}
+		Vec2d P, Q;
+		BitangentComputer bmake(minToolRadius);
+		bmake(sp[N-1], sp[0], P, Q);
+		for( size_t i(0); i < N; ++i ) {
+			size_t j = (i+1) % N;
+			Vec2d p0, p1;
+			bmake(sp[i], sp[j], p0, p1);
+			// draw MATedge from Q to p0
+			const Vec2d & c = sp[i].center();
+			if( sp[i].radius() >= 1e-5 ) {
+				if( sp[i].passage_ == ToTheRight ) {
+					sampleCircularArc(Q-c, p0-c, sp[i], inserter, false);
+				} else {
+					sampleCircularArc(Q-c, p0-c, sp[i], inserter, true);
+				}
+			}
+			Q = p1;
+			Sample s{Q, (Q-p0).normalized(), 0.0};
+			inserter(s);
+		}
+	}
 }

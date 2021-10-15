@@ -64,6 +64,8 @@ public:
 	static bool is_good_sample(const Sample & s0, const Sample & s1);
 	static Vec2d splitArcInHalf(const Vec2d & v0, const Vec2d & v1, bool clockwise);
 
+	static void sampleSmoothPaths(const SmoothPaths & smoothPaths, std::vector<std::vector<Sample>> & samples, double minToolRadius);
+
 	// Used by sampleSmoothPath
 	template< typename F >
 	static void sampleCircularArc(const Vec2d & v0, const Vec2d & v1, const BoundaryCircle & circ,

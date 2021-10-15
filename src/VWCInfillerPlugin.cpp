@@ -296,22 +296,25 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
 
     double totalLength = 0.0;
 
-    auto insertPoint = [=](const Sample & p, CLPath & path, std::vector<double> & bw) -> bool {
+    auto insertPoint = [=](const Sample & p, CLPath & path, std::vector<double> * bw = nullptr) -> bool {
         CLint x = static_cast<CLint>(round(p.pos.x() / xy_mm_per_unit_));
         CLint y = static_cast<CLint>(round(p.pos.y() / xy_mm_per_unit_));
         if( (! path.empty()) && (path.back().X == x) && (path.back().Y == y) ) return false;
         path.push_back({x,y});
-        bw.push_back(p.radius*2.0/nozzle_diameter_);
+        if( ! bw ) return true;
+        bw->push_back(p.radius*2.0/nozzle_diameter_);
         return true;
     };
 
-    auto closePath = [](CLPath & path, std::vector<double> & bw) {
-        if( path.size() < 3 ) { path.clear(); bw.clear(); return false; }
+    auto closePath = [](CLPath & path, std::vector<double> * bw = nullptr) {
+        if( path.size() < 3 ) { path.clear(); if( bw ) { bw->clear(); } return false; }
         const CLPoint & first = path[0];
         const CLPoint & last = path.back();
         if( first != last ) {
             path.push_back(first);
-            bw.push_back(bw.front());
+            if( bw ) {
+                bw->push_back(bw->front());
+            }
         }
         return true;
     };
@@ -413,10 +416,10 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
                 //outpath << p.pos.x() << ' ' << p.pos.y() << ' ' << p.radius << ' ' << p.tangent.x() << ' ' << p.tangent.y() << endl;
                 totalLength += (q-p.pos).length();
                 q = p.pos;
-                if( insertPoint(p, clipperPath, beadWidth) ) {
+                if( insertPoint(p, clipperPath, & beadWidth) ) {
                 }
             }
-            if( closePath(clipperPath, beadWidth) ) {
+            if( closePath(clipperPath, & beadWidth) ) {
                 fills.push_back(std::unique_ptr<IceSLInterface::IPath>(new IceSLInterface::Path()));
                 fills.back()->createPath(clipperPath, true);
                 fills.back()->setPathType(pathType);
@@ -455,10 +458,26 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
 #endif
         }
 
-        pts.clear();
-
         mat.removeDestroyed();
     }
+
+    // Fill the fallback_surface for remaining infill
+    for( Component & comp : components ) {
+        Sampling::sampleSmoothPaths(comp.innerSmoothPaths, pts, minToolRadius);
+        for( const auto & samples : pts ) {
+            if( samples.empty() ) continue;
+            fallback_surface.emplace_back();
+            ClipperLib::Path & clipperPath = fallback_surface.back();
+            for( const auto & p : samples ) {
+                if( insertPoint(p, clipperPath) ) {
+                }
+            }
+            if( ! closePath(clipperPath) ) {
+                fallback_surface.pop_back();
+            }
+        }
+    }
+
     //if( verbose_ ) cerr << endl << nbSamples << " samples.\n";
     //cerr << "Total length = " << totalLength << endl;
     return true;
