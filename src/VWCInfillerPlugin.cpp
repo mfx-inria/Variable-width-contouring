@@ -239,7 +239,7 @@ void printPaths(const CLPaths & paths) {
 bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double layer_thickness_mm, int brush,
         const ClipperLib::Paths & surface,
         std::vector<std::unique_ptr<IceSLInterface::IPath> > & fills,
-        bool & preserve_order)
+        bool & preserve_order, ClipperLib::Paths & fallback_surface)
 {
     // work data
     MATGraph mat_;
@@ -485,9 +485,9 @@ bool VWCInfillerPlugin::addPluginSettings(IceSLInterface::EnumerableSettingsInte
                 & minBeads_,
                 & maxBeads_,
                 "vwc_num_beads_" + std::to_string(i),
-                "Number of beads (0 means, as many as possible)",
+                "Number of contours",
                 "Brush_" + std::to_string(i),
-                "Specifies the number of beads used during contouring.",
+                "Specifies the number of beads used during contouring.Zero beads means as many as possible.",
                 912, // rank to order multiple settings, lower appears before
                 Zarathustra,
                 IE::e_NoUnit,
@@ -501,9 +501,9 @@ bool VWCInfillerPlugin::addPluginSettings(IceSLInterface::EnumerableSettingsInte
                 & minBeadWidth_min_,
                 & minBeadWidth_max_,
                 "vwc_bead_min_width_mm_" + std::to_string(i),
-                "Minimal bead width",
+                "Minimal perimeter width (mm)",
                 "Brush_" + std::to_string(i),
-                "Specifies the minimal bead width used during contouring.",
+                "Specifies the minimal bead width in millimeters used during contouring.",
                 913, // rank to order multiple settings, lower appears before
                 Zarathustra,
                 IE::e_MM,
@@ -517,9 +517,9 @@ bool VWCInfillerPlugin::addPluginSettings(IceSLInterface::EnumerableSettingsInte
                 & maxBeadWidth_min_,
                 & maxBeadWidth_max_,
                 "vwc_bead_max_width_mm_" + std::to_string(i),
-                "Maximal bead width",
+                "Maximal perimeter width (mm)",
                 "Brush_" + std::to_string(i),
-                "Specifies the maximal bead width used during contouring.",
+                "Specifies the Maximal bead width in millimeters used during contouring.",
                 914, // rank to order multiple settings, lower appears before
                 Zarathustra,
                 IE::e_MM,
@@ -533,9 +533,9 @@ bool VWCInfillerPlugin::addPluginSettings(IceSLInterface::EnumerableSettingsInte
                 & overtakeIcesl_min_,
                 & overtakeIcesl_max_,
                 "vwc_overtakes_icesl_" + std::to_string(i),
-                "VWC Takes The Wheel!",
+                "Produce perimeter and shells",
                 "Brush_" + std::to_string(i),
-                "VWC does the perimeter and the shells.",
+                "The VWC plugin overrides IceSL's perimeter and shells and produces its own.",
                 914, // rank to order multiple settings, lower appears before
                 Zarathustra,
                 IE::e_NoUnit,

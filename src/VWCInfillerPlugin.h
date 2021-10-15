@@ -31,7 +31,7 @@ class VWCInfiller : public IceSLInterface::IInfillerInterface
         void prepareInfillForSlice(int id, const AAB<2, int> &xy_slice_box, float layer_height_mm, double layer_thickness_mm, int brush) override;
 
         // called to generate the infill in a surface
-        bool generateInfill(int id, float layer_height_mm, double layer_thickness_mm, int brush, const ClipperLib::Paths &surface, std::vector<std::unique_ptr<IceSLInterface::IPath> > &fills,bool &preserve_order) override;
+        bool generateInfill(int id, float layer_height_mm, double layer_thickness_mm, int brush, const ClipperLib::Paths &surface, std::vector<std::unique_ptr<IceSLInterface::IPath> > &fills,bool &preserve_order, ClipperLib::Paths& fallback_surface) override;
 
     protected:
 
@@ -55,7 +55,7 @@ class VWCInfiller : public IceSLInterface::IInfillerInterface
         int path_priority_shell = 4;
         int path_priority_infill = 2;
         int path_priority_bridge = 1;
-        float cover_thickness_mm = 0.6;
+        float cover_thickness_mm = 0.6f;
 };
 
 class VWCInfillerPlugin : public IceSLInterface::IInfillerPlugin
