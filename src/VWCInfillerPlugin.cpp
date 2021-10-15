@@ -463,6 +463,15 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
 
     // Fill the fallback_surface for remaining infill
     for( Component & comp : components ) {
+        for( SmoothPath & sp : comp.innerSmoothPaths ) {
+            for( BoundaryCircle & bc : sp ) {
+                if( bc.passage_ == ToTheRight ) {
+                    bc.circle_.radius_ = max(0.0, bc.radius() - nozzle_diameter_/2.0);
+                } else {
+                    bc.circle_.radius_ += nozzle_diameter_/2.0;
+                }
+            }
+        }
         Sampling::sampleSmoothPaths(comp.innerSmoothPaths, pts, minToolRadius);
         for( const auto & samples : pts ) {
             if( samples.empty() ) continue;
