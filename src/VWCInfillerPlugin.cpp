@@ -239,7 +239,7 @@ void printPaths(const CLPaths & paths) {
 bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double layer_thickness_mm, int brush,
         const ClipperLib::Paths & surface,
         std::vector<std::unique_ptr<IceSLInterface::IPath> > & fills,
-        bool & preserve_order, ClipperLib::Paths & fallback_surface)
+        bool & preserve_order, ClipperLib::Paths & _fallback_surface)
 {
     // work data
     MATGraph mat_;
@@ -475,14 +475,14 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
         Sampling::sampleSmoothPaths(comp.innerSmoothPaths, pts, minToolRadius);
         for( const auto & samples : pts ) {
             if( samples.empty() ) continue;
-            fallback_surface.emplace_back();
-            ClipperLib::Path & clipperPath = fallback_surface.back();
+            _fallback_surface.emplace_back();
+            ClipperLib::Path & clipperPath = _fallback_surface.back();
             for( const auto & p : samples ) {
                 if( insertPoint(p, clipperPath) ) {
                 }
             }
             if( ! closePath(clipperPath) ) {
-                fallback_surface.pop_back();
+                _fallback_surface.pop_back();
             }
         }
     }
