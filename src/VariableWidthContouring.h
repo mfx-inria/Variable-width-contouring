@@ -115,7 +115,6 @@ public:
 	, maxToolRadius_(maxToolRadius)
 	, currentComponent_(nullptr)
 	, simplifyThreshold_(simplifyThreshold)
-	, maxCollapseRadius_(2 * maxToolRadius)
 	{
 	}
 	
@@ -213,7 +212,6 @@ protected:
 	double maxToolRadius_, minToolRadius_, simplifyThreshold_;
 	BoundaryCircles * maoi_;
 	Component * currentComponent_;
-	double maxCollapseRadius_;
 };
 
 template< typename O >
