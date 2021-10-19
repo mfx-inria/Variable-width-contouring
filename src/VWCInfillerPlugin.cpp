@@ -308,9 +308,9 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
 
     auto closePath = [](CLPath & path, std::vector<double> * bw = nullptr) {
         if( path.size() < 3 ) { path.clear(); if( bw ) { bw->clear(); } return false; }
-        const CLPoint & first = path[0];
-        const CLPoint & last = path.back();
-        if( first != last ) {
+        const CLPoint first = path[0];
+        const CLPoint last = path.back();
+        if( (first.X != last.X) || (first.Y != last.Y) ) {
             path.push_back(first);
             if( bw ) {
                 bw->push_back(bw->front());
@@ -421,7 +421,10 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
             }
             if( closePath(clipperPath, & beadWidth) ) {
                 fills.push_back(std::unique_ptr<IceSLInterface::IPath>(new IceSLInterface::Path()));
-                fills.back()->createPath(clipperPath, true);
+                // Second argument below: true means 'cyclic' and createPath() push_backs(front())
+                // This is good for regular infill, but should be set to 'false' for
+                // perimeter/shells (FIXME: WHY???)
+                fills.back()->createPath(clipperPath, overtakeIcesl_ ? false : true);
                 fills.back()->setPathType(pathType);
                 fills.back()->setTool(extruder_id_);
                 // customize flow
@@ -429,8 +432,6 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
                 for( int i = 0; i < static_cast<int>(beadWidth.size()); ++i ) {
                     fills.back()->setPerVertexAttributeValue(flow_idx, i, 1.5 * beadWidth[i] / nozzle_diameter_);
                 }
-                //int cst_flow_idx = fills.back()->addPathAttribute("flow_multiplier");
-                //fills.back()->setPathAttributeValue(cst_flow_idx, minBeadWidth_ / nozzle_diameter_);
             }
             clipperPath.clear();
             beadWidth.clear();
