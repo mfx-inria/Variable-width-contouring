@@ -781,7 +781,7 @@ collapse(vector<Disk> & cheekPrecursors, bool sharpCut) {
 		to->collapse();
 		for( EdgeIterator e = to->edges_.begin(); e != to->edges_.end(); ++e ) {
 			if( e->to()->is_collapsed() ) continue; // already collapsed
-			if( e == edge->twin() ) continue; // don't go back!
+			if( e == edge->twin() ) continue; // don't go back! (we CAN compare list::iterators here since they *do* belong to the same list, namely edge->to()->edges_;
 			to_check.push(e);
 		}
 	};
@@ -1075,7 +1075,7 @@ clip(EdgeIterator edge, const Target & clippingTarget, vector<MATvert *> & to_ad
 			to->shave();
 			for ( EdgeIterator e = to->edges_.begin(); e != to->edges_.end(); ++e ) {
 				if( ! e->to()->is_collapsed() ) continue; // already collapsed
-				if( e == edge->twin() ) continue; // don't go back!
+				if( e == edge->twin() ) continue; // don't go back! (we CAN compare list::iterators here since they *do* belong to the same list, namely edge->to()->edges_;
 				props.insert(e);
 			}
 		}

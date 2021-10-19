@@ -890,11 +890,13 @@ debugCheck() const
 		MATvert * v = const_cast<MATvert *>(&vert);
 		for( EdgeIterator e = v->edges_.begin(); e != v->edges_.end(); ++e ) {
 			assert(e->to());
-			assert(e->twin() != e->to()->edges_.end());
-			assert(e->twin()->twin() == e);
 			assert(e->from() == v);
-			assert(e->next(true)->prev(true) == e);
-			assert(e->from()->is_destroyed() || e->to()->is_destroyed() || e->next(false)->prev(false) == e);
+			assert(e->twin() != e->to()->edges_.end());
+			assert(*(e->twin()->twin()) == *e);
+			assert(*(e->next(true)->prev(true)) == *e);
+			assert(e->from()->is_destroyed() ||
+					e->to()->is_destroyed() ||
+					*(e->next(false)->prev(false)) == *e);
 		}
 	}
 #endif
