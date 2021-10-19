@@ -86,7 +86,7 @@ gatherCollapsedSegment(EdgeIterator edge, EdgeIterator & limit, CollapsedAxis & 
 		}
 advance:
 		MATGRAPH_ADVANCE;
-		if( e == edge ) {
+		if( *e == *edge ) {
 			limit = e;
 			//cerr << "Exiting CYCLE axis at " << e->from()->pos() << " --> " << e->to()->pos() << endl;
 			return;

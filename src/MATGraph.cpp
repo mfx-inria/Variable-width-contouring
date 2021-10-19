@@ -884,8 +884,8 @@ void
 MATGraph::
 debugCheck() const
 {
-#if 0
-//#ifndef NDEBUG
+//#if 0
+#ifndef NDEBUG
 	for ( const MATvert & vert : verts ) {
 		MATvert * v = const_cast<MATvert *>(&vert);
 		for( EdgeIterator e = v->edges_.begin(); e != v->edges_.end(); ++e ) {

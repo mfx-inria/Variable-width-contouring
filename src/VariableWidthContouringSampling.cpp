@@ -314,7 +314,7 @@ samplePrintPath(Component & component, BoundaryCircles * outerMaoi, vector<vecto
 				exit(-1);
 			}
 
-			edge_equals_limit = ( edge == limit );
+			edge_equals_limit = ( *edge == *limit );
 
 			if( makeNewCycle ) {
 				makeNewCycle = false;
@@ -323,7 +323,7 @@ samplePrintPath(Component & component, BoundaryCircles * outerMaoi, vector<vecto
 
 			size_t firstSampleIndex = path->size();
 			const EdgeIterator startEdge = edge;
-			while( (edge != limit) || edge_equals_limit ) {
+			while( (*edge != *limit) || edge_equals_limit ) {
 				if( visited.end() != visited.find(&(*edge)) ) break;
 				if( innerMaoi->hasToTheRightBoundary(*edge) ) {
 					BoundaryCircle bc = innerMaoi->boundaryCircle(*edge, ToTheRight);
