@@ -36,14 +36,14 @@ gatherCollapsedSegment(EdgeIterator edge, EdgeIterator & limit, CollapsedAxis & 
 #define MATGRAPH_ADVANCE e = e->nextNotTrimmed(); from = e->from(); to = e->to()
 	while( from->is_shaved() ) {
 		if( ! from->targets_.empty() ) {
-			axis.addSubAxis(from->targets_[0].edgeSource->from());
+			axis.addSubAxis(from->targets_[0].vertexSource);
 			axisCreated = true;
 		}
 		MATGRAPH_ADVANCE;
 	}
 	if( ! axisCreated ) {
 		if( ! from->targets_.empty() ) {
-			axis.addSubAxis(from->targets_[0].edgeSource->from());
+			axis.addSubAxis(from->targets_[0].vertexSource);
 		} else { // the case of pure collapsed cycles
 			axis.addSubAxis();
 		}
@@ -81,7 +81,7 @@ gatherCollapsedSegment(EdgeIterator edge, EdgeIterator & limit, CollapsedAxis & 
 		}
 		if( ! to->targets_.empty() ) {
 			assert( to->targets_[0].isClipping );
-			axis.addSubAxis(to->targets_[0].edgeSource->from());
+			axis.addSubAxis(to->targets_[0].vertexSource);
 			addFrom = true;
 		}
 advance:

@@ -977,10 +977,9 @@ clipAndShaveCollapsedParts(Components & components, bool noShaving) {
 				double targetRadius = normalVert->circumcircle.radius_; // no min() !
 				Disk disk(normalVert->circumcircle.center_, targetRadius);
 				Target clipTarget(disk, targetRadius);
-				clipTarget.edgeSource = nextEdge;
+				clipTarget.vertexSource = nextEdge->from();
 				clipTarget.isClipping = true;
 				clipTarget.clipDirection = edge->from();
-				nextEdge = EdgeIterator();
 				clip(edge->twin(), clipTarget, to_add_in_component);
 				if( debug ) cerr << "Added one clipping target at " << disk.center_ << endl;
 			}

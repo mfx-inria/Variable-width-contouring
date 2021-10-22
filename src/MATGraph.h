@@ -95,41 +95,26 @@ struct Target {
 	bool isClipping;
 	MATvert * clipDirection;
 
-	union {
-		MATvert * vertexSource;
-		EdgeIterator edgeSource;
-	};
+	MATvert * vertexSource;
 
 	Target(const Disk & d) : medialAxisDisk(d), radius(0.0),
-    vertexSource(nullptr), isClipping(false) {}
+	vertexSource(nullptr), isClipping(false) {}
 	Target(const Disk & d, double tr) : medialAxisDisk(d), radius(tr),
-    vertexSource(nullptr), isClipping(false) {}
+	vertexSource(nullptr), isClipping(false) {}
 	Target(const Target& t) : medialAxisDisk(t.medialAxisDisk), radius(t.radius),
-    isClipping(t.isClipping), clipDirection(t.clipDirection), vertexSource(nullptr)
+	isClipping(t.isClipping), clipDirection(t.clipDirection), vertexSource(t.vertexSource) {}
+	Target& operator =(const Target& t)
 	{
-		if (isClipping) {
-			edgeSource = t.edgeSource;
-		} else {
+		if (this != &t) {
+			medialAxisDisk = t.medialAxisDisk;
+			radius = t.radius;
+			isClipping = t.isClipping;
+			clipDirection = t.clipDirection;
 			vertexSource = t.vertexSource;
 		}
+		return *this;
 	}
-  Target& operator =(const Target& t)
-  {
-    if (this != &t) {
-      medialAxisDisk = t.medialAxisDisk;
-      radius = t.radius;
-      isClipping = t.isClipping;
-      clipDirection = t.clipDirection;
-			vertexSource = nullptr;
-			if (isClipping) {
-				edgeSource = t.edgeSource;
-			} else {
-				vertexSource = t.vertexSource;
-			}
-    }
-    return *this;
-  }
-  ~Target() {}
+	~Target() {}
 };
 
 class MATedge
