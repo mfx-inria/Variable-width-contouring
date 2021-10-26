@@ -287,7 +287,9 @@ computeSmoothPaths(const Component & component, SmoothPaths & out, bool walk_on_
 		int deg = degree(vert, walk_on_fire);
 		if( 0 == deg ) {
 			newCycle(vert->edges_.begin(), vert, vert->edges_.begin());
-			walkEdge(vert->edges_.begin(), vert, vert->edges_.begin());
+			if (!vert->edges_.empty()) {
+				walkEdge(vert->edges_.begin(), vert, vert->edges_.begin());
+			}
 		} else {
 			for( ConstEdgeIterator edge = vert->edges_.begin(); edge != vert->edges_.end(); ++edge ) {
 				if( ( ! walk_on_fire ) && edge->to()->is_destroyed() ) continue;
