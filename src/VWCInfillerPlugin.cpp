@@ -140,8 +140,28 @@ void VWCInfiller::prepareInfillForSlice(int id, const AAB<2, int>& xy_slice_box,
         }
         s->getValue(v); maxBeadWidth_ = v;
     }
-    if( maxBeadWidth_ < 2.0 * minBeadWidth_ ) {
-        throw Fatal("Fatality kill (VWC 2*min>max)");
+    float nz;
+    m_EnumerableSettings->getSettingByName("nozzle_diameter_mm_" + std::to_string(extruder_id_))->getValue(nz);
+    if (minBeadWidth_ < 0.75f * nz) {
+      minBeadWidth_ = 0.75f * nz;
+      auto s = m_EnumerableSettings->getSettingByName("vwc_bead_min_width_mm_" + std::to_string(extruder_id_));
+      s->setValue(static_cast<float>(minBeadWidth_));
+    }
+    if (minBeadWidth_ > nz) {
+      minBeadWidth_ = nz;
+      auto s = m_EnumerableSettings->getSettingByName("vwc_bead_min_width_mm_" + std::to_string(extruder_id_));
+      s->setValue(static_cast<float>(minBeadWidth_));
+    }
+    if (maxBeadWidth_ > 3.0f * nz) {
+      maxBeadWidth_ = 3.0f * nz;
+      auto s = m_EnumerableSettings->getSettingByName("vwc_bead_max_width_mm_" + std::to_string(extruder_id_));
+      s->setValue(static_cast<float>(maxBeadWidth_));
+    }
+    if( maxBeadWidth_ < 2.0f * minBeadWidth_ ) {
+      maxBeadWidth_ = 2.0f * minBeadWidth_;
+      auto s = m_EnumerableSettings->getSettingByName("vwc_bead_max_width_mm_" + std::to_string(extruder_id_));
+      s->setValue(static_cast<float>(maxBeadWidth_));
+      //throw Fatal("Fatality kill (VWC 2*min>max)");
     }
     // retrieve processing scale factor
     {
@@ -499,8 +519,8 @@ bool VWCInfillerPlugin::addPluginSettings(IceSLInterface::EnumerableSettingsInte
 {
     using IE = IceSLInterface::EnumerableSettingsInterface;
     const int numBrushes = enumerable_settings.getNumberOfBrushes();
-    minBeadWidth_.resize(numBrushes, 0.3f);
-    maxBeadWidth_.resize(numBrushes, 0.7f);
+    minBeadWidth_.resize(numBrushes, 0.75f * 0.4f);
+    maxBeadWidth_.resize(numBrushes, 2.0f * 0.4f);
     numBeads_.resize(numBrushes, 4);
     std::unique_ptr<IE::SettingInterface> s;
     for( int i = 0; i < numBrushes; ++i ) {
@@ -528,7 +548,8 @@ bool VWCInfillerPlugin::addPluginSettings(IceSLInterface::EnumerableSettingsInte
         s = enumerable_settings.addSettingFromPlugin(
                 & minBeadWidth_[i],
                 & minBeadWidth_min_,
-                & minBeadWidth_max_,
+                //& minBeadWidth_max_,
+                (float*)nullptr,
                 "vwc_bead_min_width_mm_" + std::to_string(i),
                 "Minimal perimeter width (mm)",
                 "Brush_" + std::to_string(i),
@@ -544,7 +565,8 @@ bool VWCInfillerPlugin::addPluginSettings(IceSLInterface::EnumerableSettingsInte
         s = enumerable_settings.addSettingFromPlugin(
                 & maxBeadWidth_[i],
                 & maxBeadWidth_min_,
-                & maxBeadWidth_max_,
+                //& maxBeadWidth_max_,
+                (float*)nullptr,
                 "vwc_bead_max_width_mm_" + std::to_string(i),
                 "Maximal perimeter width (mm)",
                 "Brush_" + std::to_string(i),

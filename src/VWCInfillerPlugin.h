@@ -63,11 +63,11 @@ class VWCInfillerPlugin : public IceSLInterface::IInfillerPlugin
     private:
 
         std::vector<float> minBeadWidth_;
-        float minBeadWidth_min_ = 0.2f;
-        float minBeadWidth_max_ = 0.4f;
+        float minBeadWidth_min_ = 0.0f;
+        float minBeadWidth_max_ = 0.4f; // not used
         std::vector<float> maxBeadWidth_;
-        float maxBeadWidth_min_ = 0.6f;
-        float maxBeadWidth_max_ = 1.2f;
+        float maxBeadWidth_min_ = 0.0f;
+        float maxBeadWidth_max_ = 1.2f; // not used
         std::vector<int> numBeads_;
         int minBeads_ = 0;
         int maxBeads_ = 5000;
