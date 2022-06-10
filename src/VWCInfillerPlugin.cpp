@@ -450,7 +450,7 @@ bool VWCInfiller::generateInfill(int slice_id, float layer_height_mm, double lay
                 // customize flow
                 int flow_idx = fills.back()->addPerVertexAttribute("flow_multiplier");
                 for( int i = 0; i < static_cast<int>(beadWidth.size()); ++i ) {
-                    fills.back()->setPerVertexAttributeValue(flow_idx, i, 1.5 * beadWidth[i] / nozzle_diameter_);
+                    fills.back()->setPerVertexAttributeValue(flow_idx, i, 1.0 * beadWidth[i] /*/ nozzle_diameter_*/);
                 }
             }
             clipperPath.clear();
