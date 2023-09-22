@@ -34,7 +34,7 @@ void VWCInfiller::setNumSlices(int num)
 
 // -----------------------------------------------
 
-void VWCInfiller::setWorldSpace(v3f world_corner_mm, v3f extent_mm)
+void VWCInfiller::setCoordSpaces(v3f processing_world_corner_mm, v3f processing_extent_mm, v3f tight_world_corner_mm, v3f tight_extent_mm, v3f toolpaths_world_corner_mm, v3f toolpaths_extent_mm)
 {
 
 }

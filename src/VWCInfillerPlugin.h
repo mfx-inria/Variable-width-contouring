@@ -19,7 +19,13 @@ class VWCInfiller : public IceSLInterface::IInfillerInterface
         virtual ~VWCInfiller() = default;
 
         void setNumSlices(int num) override;
-        void setWorldSpace(v3f world_corner_mm, v3f extent_mm) override;
+        void setCoordSpaces(
+          v3f processing_world_corner_mm,
+          v3f processing_extent_mm,
+          v3f tight_world_corner_mm,
+          v3f tight_extent_mm,
+          v3f toolpaths_world_corner_mm,
+          v3f toolpaths_extent_mm) override;
 
         // called once at start
         void prepareInfill(int brush) override;
@@ -96,7 +102,7 @@ class VWCInfillerPlugin : public IceSLInterface::IInfillerPlugin
         std::string name()    const override { return "Variable-width contouring"; }
         std::string author()  const override { return "Samuel Hornus and Tim Kuipers"; }
         std::string comment() const override { return "See article \"Variable-width contouring for additive manufacturing\""; }
-        std::string guid()    const override { return ""; }
+        std::string guid()    const override { return "8179F29F-49D1-4DF6-A926-258D9EE9B5D4"; }
 
         bool addPluginSettings(IceSLInterface::EnumerableSettingsInterface& enumerable_settings) override;
 
