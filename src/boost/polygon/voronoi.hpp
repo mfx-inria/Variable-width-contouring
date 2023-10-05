@@ -14,7 +14,7 @@
 #ifdef WIN32
 #pragma message(LOCAL_BOOST_MESSAGE)
 #else
-#warning LOCAL_BOOST_MESSAGE
+//#warning LOCAL_BOOST_MESSAGE
 #endif
 
 #include "isotropy.hpp"
