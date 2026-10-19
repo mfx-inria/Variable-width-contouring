@@ -1,5 +1,5 @@
 # vim: set sts=0 ts=4 sw=4 noet tw=0 :
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 cmake_policy(SET CMP0011 NEW)
 cmake_policy(SET CMP0054 NEW)
 
